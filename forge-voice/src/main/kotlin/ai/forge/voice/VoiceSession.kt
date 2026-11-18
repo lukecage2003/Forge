@@ -13,8 +13,14 @@ enum class VoiceState { IDLE, LISTENING, THINKING, SPEAKING }
 
 /** Abstraction de la synthèse vocale (Android TextToSpeech, Piper/Sherpa-ONNX, cloud…). */
 interface SpeechOutput {
-    /** Met un segment en file d'attente ; renvoie quand il a été intégralement prononcé ou annulé. */
+    /**
+     * Met un segment en file d'attente. Une implémentation « fluide » peut rendre la main dès que le
+     * segment est accepté (la phrase suivante se prépare pendant que la précédente est dite : pas de
+     * silence mécanique entre les phrases) ; [awaitIdle] attend alors la fin réelle de la parole.
+     */
     suspend fun speak(segment: String)
+    /** Attend que tout ce qui a été mis en file soit prononcé (ou annulé). */
+    suspend fun awaitIdle() {}
     /** Arrêt immédiat de toute parole en cours et vidage de la file. */
     fun stopNow()
 }
@@ -90,6 +96,7 @@ class VoiceSessionController(
                 for (seg in chunker.push(tokens)) speakSegment(seg)
             }
             chunker.flush()?.let { speakSegment(it) }
+            output.awaitIdle()
             _state.value = VoiceState.LISTENING
         }
     }

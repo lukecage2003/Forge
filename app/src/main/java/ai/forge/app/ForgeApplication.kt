@@ -246,6 +246,7 @@ class AppContainer(val app: Application) {
         settings = new
         new.save(app)
         gate.ceiling = new.autonomyCeiling
+        applyVoice()
         voice.requireWakeWord = new.requireWakeWord
         voice.bargeInEnabled = new.bargeInWithoutHeadset
         orchestrator = buildOrchestrator()
@@ -295,6 +296,14 @@ class AppContainer(val app: Application) {
         feedbackLog.lessonFrom(f)?.let { scope.launch { memory.remember(it, confirmed = true) } }
     }
 
+    /** Voix : préférences + meilleure voix selon la connexion (appelé au démarrage et au changement de réseau). */
+    fun applyVoice() {
+        voice.tts.preferredVoice = settings.voiceName
+        voice.tts.allowNetworkVoices = settings.networkVoices
+        voice.tts.speechRate = settings.speechRate
+        scope.launch { voice.tts.selectBestVoice(networkAvailable.value) }
+    }
+
     fun newConversation() { conversation = ConversationContext(UUID.randomUUID().toString()) }
 
     // Déclaré en dernier : le rappel réseau peut arriver immédiatement et utilise tout ce qui précède.
@@ -303,9 +312,10 @@ class AppContainer(val app: Application) {
         val cm = app.getSystemService(ConnectivityManager::class.java)
         networkAvailable.value = cm.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
         rebuild()
+        applyVoice()
         cm.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) { networkAvailable.value = true; rebuild() }
-            override fun onLost(network: Network) { networkAvailable.value = false; rebuild() }
+            override fun onAvailable(network: Network) { networkAvailable.value = true; rebuild(); applyVoice() }
+            override fun onLost(network: Network) { networkAvailable.value = false; rebuild(); applyVoice() }
         })
     }
 }

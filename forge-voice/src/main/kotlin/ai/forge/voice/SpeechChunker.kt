@@ -5,7 +5,7 @@ package ai.forge.voice
  * commence dès la première phrase complète (réponse progressive en streaming, §2.2).
  * Nettoie aussi les artefacts écrits (Markdown, URL) qui n'ont pas de sens à l'oral.
  */
-class SpeechChunker(private val minChars: Int = 40, private val maxChars: Int = 280) {
+class SpeechChunker(private val minChars: Int = 60, private val maxChars: Int = 320) {
     private val buffer = StringBuilder()
 
     /** Ajoute des jetons et renvoie les segments prêts à être prononcés. */
@@ -50,10 +50,21 @@ class SpeechChunker(private val minChars: Int = 40, private val maxChars: Int = 
         private val mdLink = Regex("\\[([^]]+)]\\([^)]+\\)")
         private val mdMarks = Regex("(\\*\\*|__|\\*|`|#+\\s|^>\\s|^[-•]\\s)", RegexOption.MULTILINE)
 
+        private val emoji = Regex("[\\x{1F000}-\\x{1FAFF}\\x{2600}-\\x{27BF}\\x{FE0F}\\x{200D}]")
+        private val tags = Regex("\\[(B|S|P)?\\d+]|\\[À VÉRIFIER]|\\(non sourcé\\)")
+        private val timecode = Regex("\\[\\d{1,2}:\\d{2}]")
+
+        /** Texte prononçable : sans Markdown, URL, émojis, étiquettes de sources ni symboles. */
         fun clean(text: String): String = text
             .replace(mdLink, "$1")
             .replace(url, "le lien")
             .replace(mdMarks, "")
+            .replace(emoji, "")
+            .replace(tags, "")
+            .replace(timecode, "")
+            .replace("→", ", ").replace("×", " fois ").replace("&", " et ").replace("%", " pour cent")
+            .replace(Regex("[|_#*~^<>{}]"), " ")
+            .replace(Regex("\\s+([,.!?…])"), "$1")
             .replace(Regex("\\s+"), " ")
             .trim()
     }

@@ -86,4 +86,26 @@ class VoiceTest {
         assertEquals(1, out.spoken.size)
         assertEquals(VoiceState.LISTENING, ctl.state.value)
     }
+
+    @Test fun spokenTextIsCleanedOfSymbolsAndTags() {
+        assertEquals("Le costume absorbe 40 pour cent des chocs, voir la page.", SpeechChunker.clean("**Le costume** absorbe 40% des chocs [B1] 🔥 → voir la page."))
+        assertEquals("Avantage T'Challa.", SpeechChunker.clean("Avantage T'Challa ✅."))
+    }
+
+    private class PipelinedOutput : SpeechOutput {
+        val queued = mutableListOf<String>(); var idleAwaited = 0
+        override suspend fun speak(segment: String) { queued += segment }
+        override suspend fun awaitIdle() { idleAwaited++ }
+        override fun stopNow() {}
+    }
+
+    @Test fun sessionWaitsForRealEndOfSpeechBeforeListening() = runTest {
+        val out = PipelinedOutput()
+        val ctl = VoiceSessionController(this, out, { flow { emit("Première phrase assez longue pour être dite seule. "); emit("Deuxième phrase, elle aussi complète et naturelle. ") } })
+        ctl.start(); ctl.onFinalUtterance("Parle-moi de Thor")
+        advanceUntilIdle()
+        assertEquals(1, out.idleAwaited)
+        assertEquals(VoiceState.LISTENING, ctl.state.value)
+        assertTrue(out.queued.isNotEmpty())
+    }
 }

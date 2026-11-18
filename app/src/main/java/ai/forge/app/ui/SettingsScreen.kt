@@ -152,6 +152,7 @@ fun SettingsScreen(container: AppContainer) {
 
         item {
             Section("Voix") {
+                VoicePicker(container, s.voiceName, s.networkVoices, onPick = { s = s.copy(voiceName = it) }, onNetwork = { s = s.copy(networkVoices = it) })
                 Text("Vitesse de parole : ${"%.2f".format(s.speechRate)}", color = ForgePalette.Text)
                 Slider(s.speechRate, { s = s.copy(speechRate = it) }, valueRange = 0.6f..1.6f,
                     colors = SliderDefaults.colors(thumbColor = ForgePalette.Gold, activeTrackColor = ForgePalette.Gold))
@@ -180,6 +181,33 @@ fun SettingsScreen(container: AppContainer) {
                 container.voice.tts.speechRate = s.speechRate
                 container.updateSettings(s)
                 saved = true
+            }
+        }
+    }
+}
+
+@Composable
+private fun VoicePicker(container: AppContainer, selected: String?, network: Boolean, onPick: (String?) -> Unit, onNetwork: (Boolean) -> Unit) {
+    val scope = rememberCoroutineScope()
+    var voices by remember { mutableStateOf<List<android.speech.tts.Voice>>(emptyList()) }
+    val active by container.voice.tts.activeVoice.collectAsState()
+    LaunchedEffect(Unit) { voices = container.voice.tts.frenchVoices() }
+    active?.let { Hint("Voix actuelle : $it") }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) { Text("Voix naturelles en ligne", color = ForgePalette.Text); Hint("Bien plus naturelles ; voix locale automatique hors-ligne.") }
+        Switch(network, onNetwork, colors = SwitchDefaults.colors(checkedTrackColor = ForgePalette.Gold, checkedThumbColor = ForgePalette.Black))
+    }
+    if (voices.isEmpty()) Hint("Aucune voix française trouvée : installez « Synthèse vocale Google » et la voix française dans les paramètres du téléphone.")
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            RadioButton(selected == null, { onPick(null) }, colors = RadioButtonDefaults.colors(selectedColor = ForgePalette.Gold))
+            Text("Automatique (la plus naturelle disponible)", color = ForgePalette.Text)
+        }
+        voices.take(8).forEach { v ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(selected == v.name, { onPick(v.name) }, colors = RadioButtonDefaults.colors(selectedColor = ForgePalette.Gold))
+                Text(container.voice.tts.describe(v), Modifier.weight(1f), color = ForgePalette.Text, style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = { scope.launch { container.voice.tts.preview(v.name); container.applyVoice() } }) { Text("Écouter", color = ForgePalette.GoldSoft) }
             }
         }
     }
