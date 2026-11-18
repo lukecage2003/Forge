@@ -1,32 +1,73 @@
 # Architecture de FORGE
 
-## 1. Vue d'ensemble
+## 1. Vue d'ensemble et modules (§13.1)
+
+Toute l'intelligence (décisions, garde-fous, mémoire, preuves) vit dans des modules Kotlin/JVM purs,
+testables sans Android et réutilisables plus tard sur un PC compagnon. L'application Android ne
+fournit que les « capteurs et effecteurs » : micro, haut-parleur, stockage, Drive, Intents, interface.
 
 ```
-┌──────────────────────────── Application Android (app/) ────────────────────────────┐
-│  UI Compose ── VoiceCoordinator ── VoiceSessionService (premier plan « microphone ») │
-│      │            │  AndroidSpeechInput (SpeechRecognizer, on-device)               │
-│      │            │  AndroidTtsOutput   (TextToSpeech, voix FR locale)              │
-│      │            ▼                                                                  │
-│      │     ┌──────────────── forge-core (Kotlin pur, testé) ────────────────┐       │
-│      └───► │ Orchestrator ─ IntentAnalyzer ─ Specialists ─ QualityControl   │       │
-│            │     │               │                                          │       │
-│            │ ProviderRouter   MemoryManager ── MemoryStore ◄── RoomMemoryStore     │
-│            │     │               (BM25 + vecteurs, contradictions, rétention)       │
-│            │ LlmProvider      PermissionGate ── ToolRegistry ◄── Actions Android  │
-│            │  ├ MediaPipe (local, app)   ClaimLedger (P1–P5)                       │
-│            │  ├ OpenAI-compatible (LAN/cloud)  Editorial (formats, rôles, QC)      │
-│            │  └ Anthropic (facultatif)   Writing (niveaux, corrigés)               │
-│            │                             Brain (retours, leçons, évaluations)      │
-│            └────────────────────────────────────────────────────────────────┘       │
-│  DriveConnector (API v3, portée drive.file) ── cache local + empreintes md5          │
-└─────────────────────────────────────────────────────────────────────────────────────┘
+                                 ┌──────────── app (Android) ────────────┐
+                                 │ UI Compose · voix · Room · MediaPipe  │
+                                 │ Drive · Intents · Keystore · réseau   │
+                                 └───────────────────┬───────────────────┘
+        ┌──────────────┬──────────────┬──────────────┼──────────────┬──────────────┬─────────────┐
+ forge-reasoning  forge-voice   forge-editorial  forge-academy  forge-actions  forge-evaluation  forge-research
+   │   │   │                      │      │          │    │          │            │  │  │  │
+   │   │   └── forge-security ◄───┼──────┼──────────┼────┼──────────┘            │  │  │  │
+   │   └────── forge-memory ◄─────┼──────┼──────────┘    │                       │  │  │  │
+   └────────── forge-models ──────┼──────┼───────────────┼───────────────────────┘  │  │  │
+                (→ security)      │      │               │                          │  │  │
+              forge-comic-intelligence ◄─┘  forge-writing ◄┘ (aussi ← editorial)     ┘  ┘  │
+                                         tous ──► forge-core (modèle, texte, persona) ◄────┘
 ```
 
-**Principe structurant :** toute l'intelligence (décisions, garde-fous, mémoire, preuves) vit dans
-`forge-core`, sans dépendance Android. Elle est donc testable sur n'importe quelle machine, et
-réutilisable plus tard sur un PC compagnon ou un serveur personnel. Android ne fournit que des
-« capteurs et effecteurs » : micro, haut-parleur, stockage, Drive, Intents.
+| Module | Rôle | Dépend de |
+|---|---|---|
+| `forge-core` | Types partagés (rôles, autonomie, profondeur, classes de données, tâches), texte FR, personnalité | — |
+| `forge-security` | Portail d'autorisation 0–4, outils, politique de sortie des données, protection anti-injection | core |
+| `forge-models` | Moteurs LLM (streaming annulable), routeur gouverné, usage/coûts, ressources, registre de moteurs | core, security |
+| `forge-memory` | Mémoire 5 niveaux, recherche hybride, doublons, contradictions, rétention, export | core |
+| `forge-voice` | Fin de tour, interruptions, découpage oral, session vocale, présence visuelle | core |
+| `forge-reasoning` | Spécialistes, analyse d'intention, orchestrateur (+ classification des données) | core, models, memory, security |
+| `forge-research` | Classification et corroboration des sources | core |
+| `forge-comic-intelligence` | Claim Ledger P1–P5, références, noms de fichiers | core |
+| `forge-writing` | Niveaux de correction, corrigés, analyses typographiques | core |
+| `forge-editorial` | Formats, rôles Primestone, style oral, vérification, production, SRT, Motion Studio | core, comics, writing |
+| `forge-academy` | Cours, explications, fiches, SM-2, quiz, lacunes, planning, examens | core, memory, writing |
+| `forge-actions` | Moteur d'actions, journal, arrêt d'urgence, catalogue des mécanismes Android | core, security |
+| `forge-evaluation` | Retours, leçons, versions d'instructions, bancs, bilans à erreurs critiques | core, memory, models, comics |
+
+Aucune dépendance circulaire (graphe vérifié par Gradle, qui refuse les cycles entre projets).
+
+**Modules du §13.1 non encore créés, et pourquoi :** `forge-conversation` (aujourd'hui dans
+`forge-reasoning` : `ConversationContext` ; à extraire avec la persistance de l'historique),
+`forge-browser`, `forge-drive`, `forge-documents` (le code dépendant d'Android vit dans `app/` ;
+les modules seront créés avec leur logique pure : extraction lisible, indexation progressive,
+découpage CBZ/PDF), `forge-ui` (sera un module Android séparé quand `app/` compilera). Créer des
+modules vides n'apporterait rien (§20 : « ne pas générer artificiellement des fichiers »).
+
+### Contrats principaux entre modules
+
+| Contrat | Fournisseur | Consommateurs |
+|---|---|---|
+| `LlmProvider.stream(ChatRequest): Flow<LlmEvent>` — annulable | models / app | reasoning, evaluation |
+| `ProviderRouter.select(RoutingNeeds)` — `task` + `dataClass` obligatoires pour le cloud | models | reasoning |
+| `EgressPolicy.check(provider, task, data)` | security | models |
+| `UntrustedContent.wrap(source, text)` — tout contenu externe | security | reasoning (puis browser, documents) |
+| `PermissionGate.evaluate` / `ToolRegistry.executeGuarded` | security | actions, reasoning |
+| `MemoryStore` (persistance) / `MemoryManager` (logique) | memory / app (Room) | reasoning, academy, evaluation |
+| `SpeechOutput`, `ResponseSource` | app / reasoning | voice |
+| `ClaimLedger.record` (invariants P1–P5) | comics | editorial, evaluation |
+| `EditorialVerifier.verify → ScriptStatus` | editorial | MotionStudioExporter, app |
+| `LoadableModel` + `ModelResourceManager.acquire` | app / models | app |
+
+### Modèles de données clés
+`MemoryItem` (texte, type, clé sémantique, provenance, rétention, `supersededBy`) ·
+`Claim` (affirmation, sources hiérarchisées et localisables, niveau P, citation exacte, continuité,
+contradictions, statut) · `ScriptDocument` / `ScriptSegment` (narration, visuels, affirmations,
+continuité) · `ProductionPlan` (séquences, plans minutés, médias, SRT) · `MotionStudioPackage`
+(manifeste v1) · `Flashcard` (SM-2) · `ActionLogEntry` · `Metric` / `Scorecard`.
 
 ## 2. Décisions techniques et justifications
 
@@ -43,10 +84,11 @@ entre l'app et les API audio/IA natives, intégration MediaPipe/LiteRT moins dir
 | Serveur LAN compatible OpenAI (Ollama, llama.cpp sur PC) | bonne à très bonne (7B–70B) | bonne en Wi-Fi | gratuit | totale (réseau domestique) | Standard / Expert sans cloud |
 | API cloud (Anthropic, OpenAI, Mistral…) | excellente | variable | payant | dépend du fournisseur | facultatif, Deep Research / Production |
 
-`ProviderRouter` filtre par contraintes dures (contexte, vision, politique « local uniquement »,
-données sensibles) puis classe : qualité suffisante → **local d'abord** → qualité → coût.
+`ProviderRouter` filtre par contraintes dures (contexte, vision, réseau, politique « local uniquement »,
+autorisation par fournisseur, tâche et classe de données, limites d'usage) puis classe : qualité suffisante → **local d'abord** → qualité → coût.
 Par défaut, le cloud n'est autorisé que pour les profondeurs Deep Research / Expert / Production,
-et jamais pour une requête marquée sensible. Une seule interface `LlmProvider` (flux annulable)
+uniquement pour les tâches cochées, et uniquement pour des demandes sans mémoire ni document
+(`DataClass.GENERAL`). L'orchestrateur classe chaque requête AVANT le choix du moteur. Une seule interface `LlmProvider` (flux annulable)
 couvre tous les moteurs ; `OpenAiCompatibleProvider` couvre à lui seul llama.cpp, Ollama,
 LM Studio, vLLM, Mistral, OpenRouter et OpenAI.
 
@@ -119,3 +161,28 @@ pas d'invention de numéro, pas d'action simulée).
 - Base de mémoire exclue de la sauvegarde cloud et du transfert d'appareil.
 - Micro uniquement sur action de l'utilisateur, notification permanente en mode mains libres,
   arrêt d'urgence depuis l'app et la notification.
+
+### 2.10 Moteur local : MediaPipe/LiteRT d'abord, llama.cpp ensuite
+| Critère | MediaPipe / LiteRT-LM (.task) | llama.cpp (GGUF, JNI) |
+|---|---|---|
+| Accélération S25 | GPU (et NPU selon versions) | CPU ARM (i8mm), GPU Vulkan/OpenCL expérimental |
+| Choix de modèles | Gemma surtout | Très large (Qwen, Mistral, Llama, Phi…) |
+| Intégration | Dépendance Gradle | Compilation NDK, JNI à maintenir |
+| Appels d'outils | À construire par prompt | À construire par prompt / grammaires GBNF |
+
+Décision : MediaPipe pour la voix (latence), llama.cpp ajouté en J3 pour le choix des modèles
+et les grammaires contraintes (appels d'outils fiables). Les deux derrière `LlmProvider` +
+`ModelResourceManager` : un seul gros modèle résident à la fois.
+
+### 2.11 Autres choix (§13)
+| Besoin | Choix | Raison |
+|---|---|---|
+| Architecture app | MVVM + modules de domaine purs (Clean Architecture « légère ») | Les règles métier sont déjà isolées et testées ; pas de couche use-case vide |
+| Persistance | Room/SQLite ; FTS5 via `SupportSQLiteDatabase` brut quand le volume l'exigera | Room n'expose que FTS3/4 en annotations |
+| Vecteurs | Index en RAM puis sqlite-vec si > 50 000 éléments | Simplicité tant que le volume est faible |
+| Embeddings | Modèle multilingue léger en LiteRT (ex. E5-small / EmbeddingGemma) | Paraphrase FR, ~100–300 Mo |
+| OCR | ML Kit Text Recognition (latin), sur l'appareil | Gratuit, local, rapide |
+| PDF | `PdfRenderer` (rendu) + extraction texte (PdfBox-Android) | Natif + texte sélectionnable |
+| Tâches de fond | WorkManager (contraintes batterie/réseau) | Indexation Drive, révisions |
+| Secrets | Android Keystore (AES-GCM) | Matériel, non exportable |
+| Réglages | SharedPreferences aujourd'hui, DataStore si besoin de flux réactifs | Suffisant pour l'instant |

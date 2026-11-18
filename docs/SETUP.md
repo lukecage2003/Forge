@@ -1,8 +1,8 @@
 # Mise en place
 
-## Cœur (toute machine avec JDK 17+)
+## Modules JVM (toute machine avec JDK 17+)
 ```bash
-./gradlew :forge-core:test
+./gradlew test
 ```
 
 ## Application Android
