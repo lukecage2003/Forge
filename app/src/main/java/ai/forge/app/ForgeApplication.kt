@@ -135,6 +135,11 @@ class AppContainer(val app: Application) {
     var conversation = ConversationContext(UUID.randomUUID().toString())
         private set
 
+    // Déclarés avant l'orchestrateur : ils servent pendant sa construction.
+    private val pageFetcher by lazy { PageFetcher() }
+    /** Session gardée d'une reconstruction à l'autre : son cache (20 min) et robots.txt restent chauds. */
+    private var researchSession: Pair<String, ResearchSession>? = null
+
     var orchestrator: Orchestrator = buildOrchestrator()
         private set
 
@@ -225,10 +230,6 @@ class AppContainer(val app: Application) {
             comics = listOf(ai.forge.browser.MediaWikiSearchProvider.marvelWiki(), ai.forge.browser.MediaWikiSearchProvider.dcWiki()),
         )
     }
-
-    private val pageFetcher by lazy { PageFetcher() }
-    /** Session gardée d'une reconstruction à l'autre : son cache (20 min) et robots.txt restent chauds. */
-    private var researchSession: Pair<String, ResearchSession>? = null
 
     private fun researchTool(): ResearchTool? {
         val provider = searchProvider() ?: return null
