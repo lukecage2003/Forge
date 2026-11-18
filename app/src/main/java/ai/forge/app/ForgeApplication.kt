@@ -148,6 +148,32 @@ class AppContainer(val app: Application) {
 
     val voice = VoiceCoordinator(app, scope, { orchestrator }, { conversation }).also {
         it.requireWakeWord = settings.requireWakeWord; it.bargeInEnabled = settings.bargeInWithoutHeadset
+        it.parakeetDir = { if (settings.useParakeet) parakeetDir() else null }
+    }
+
+    /** Dossier de la reconnaissance Parakeet (installée ou non). */
+    fun parakeetDir(): java.io.File = java.io.File(app.filesDir, "stt/parakeet-tdt-0.6b-v3")
+    val parakeetInstalled get() = ai.forge.app.voice.ParakeetEngine.isInstalled(parakeetDir())
+    val parakeetInstall = MutableStateFlow<String?>(null)
+
+    /** Télécharge les quatre fichiers de Parakeet (reprise possible, empreintes vérifiées). */
+    fun installParakeet() {
+        if (parakeetInstall.value?.startsWith("Téléchargement") == true) return
+        scope.launch {
+            val files = DownloadableModel.PARAKEET_FILES
+            val total = files.sumOf { it.sizeBytes }
+            var before = 0L
+            for (f in files) {
+                parakeetInstall.value = "Téléchargement… ${before * 100 / total} %"
+                when (val r = ModelDownloader().download(f, parakeetDir()) { d, _ -> parakeetInstall.value = "Téléchargement… ${(before + d) * 100 / total} %" }) {
+                    is ModelDownloader.Result.Ready -> before += f.sizeBytes
+                    is ModelDownloader.Result.Failed -> { parakeetInstall.value = r.reason; return@launch }
+                }
+            }
+            updateSettings(settings.copy(useParakeet = true))
+            parakeetInstall.value = "Parakeet installé : Forge vous comprend désormais hors-ligne."
+            voice.warmUpRecognizer()
+        }
     }
 
 

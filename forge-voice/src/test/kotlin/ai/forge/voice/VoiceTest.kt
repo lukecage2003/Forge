@@ -141,3 +141,37 @@ class FirstWordsTest {
         assertEquals(1, c2.push("Le vibranium vient d'une météorite tombée au Wakanda, et ").size)   // coupe à la virgule
     }
 }
+
+class SpeechSegmenterTest {
+    private fun tone(ms: Int, amp: Float) = FloatArray(16 * ms) { i -> (amp * kotlin.math.sin(i * 0.3)).toFloat() }
+    private fun noise(ms: Int) = FloatArray(16 * ms) { i -> (0.002 * kotlin.math.sin(i * 1.7)).toFloat() }
+
+    @Test fun segmentsSpeechBetweenSilences() {
+        val s = SpeechSegmenter()
+        val ev = mutableListOf<SpeechSegmenter.Event>()
+        repeat(50) { ev += s.push(noise(20)) }                 // 1 s de bruit de fond
+        repeat(100) { ev += s.push(tone(20, 0.3f)) }           // 2 s de parole
+        repeat(80) { ev += s.push(noise(20)) }                 // 1,6 s de silence
+        assertEquals(1, ev.count { it is SpeechSegmenter.Event.SpeechStart })
+        assertTrue(ev.any { it is SpeechSegmenter.Event.Interim })
+        val end = ev.filterIsInstance<SpeechSegmenter.Event.End>().single()
+        assertTrue(end.audio.size in 16 * 2_000..16 * 3_600, "${end.audio.size}")   // parole + pré-roulement + silence final
+    }
+
+    @Test fun waitsLongerAfterAnUnfinishedSentence() {
+        val s = SpeechSegmenter()
+        repeat(25) { s.push(noise(20)) }
+        repeat(50) { s.push(tone(20, 0.3f)) }
+        s.lastInterim = "je voudrais savoir si et"              // phrase inachevée
+        val ev = (0 until 90).flatMap { s.push(noise(20)) }    // 1,8 s de silence : pas encore fini
+        assertTrue(ev.none { it is SpeechSegmenter.Event.End })
+        s.lastInterim = "Quel est le pouvoir de Tornade ?"
+        assertTrue((0 until 45).flatMap { s.push(noise(20)) }.any { it is SpeechSegmenter.Event.End })
+    }
+
+    @Test fun ignoresSteadyBackgroundNoise() {
+        val s = SpeechSegmenter()
+        val ev = (0 until 300).flatMap { s.push(tone(20, 0.004f)) }
+        assertTrue(ev.isEmpty())
+    }
+}

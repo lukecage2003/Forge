@@ -246,6 +246,15 @@ fun SettingsScreen(container: AppContainer) {
                     TextButton(onClick = { s = s.copy(neuralVoicePath = null); removeNeural = true }) { Text("Utiliser la voix du téléphone", color = ForgePalette.TextMuted) }
                 }
                 neuralState?.let { Hint(it) }
+                val sttState by container.parakeetInstall.collectAsState()
+                Text("Reconnaissance hors-ligne", style = MaterialTheme.typography.titleMedium, color = ForgePalette.Text)
+                Hint("Parakeet (NVIDIA, licence CC-BY 4.0) : comprend mieux les longues phrases, les noms et la ponctuation, sans Internet. 670 Mo.")
+                if (!container.parakeetInstalled) GlassPill(if (sttState?.startsWith("Téléchargement") == true) sttState!! else "Installer Parakeet") { container.installParakeet() }
+                else Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Utiliser Parakeet", Modifier.weight(1f), color = ForgePalette.Text)
+                    Switch(s.useParakeet, { s = s.copy(useParakeet = it) }, colors = switchColors)
+                }
+                sttState?.takeIf { !it.startsWith("Téléchargement") }?.let { Hint(it) }
                 VoicePicker(container, s.voiceName, s.networkVoices, onPick = { s = s.copy(voiceName = it) }, onNetwork = { s = s.copy(networkVoices = it) })
                 Text("Vitesse de parole : ${"%.2f".format(s.speechRate)}", color = ForgePalette.Text)
                 Slider(s.speechRate, { s = s.copy(speechRate = it) }, valueRange = 0.9f..2.0f,

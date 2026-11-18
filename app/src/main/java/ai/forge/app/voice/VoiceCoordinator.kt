@@ -73,22 +73,48 @@ class VoiceCoordinator(
     )
     val state: StateFlow<VoiceState> = controller.state
 
-    private val input: AndroidSpeechInput = AndroidSpeechInput(
-        context,
-        onPartial = { partialTranscript.value = it; touch(); signal(PresenceSignal.PartialTranscript) },
-        onSpeechStart = { controller.onUserSpeechStarted() },
-        onFinal = { raw ->
-            partialTranscript.value = ""; touch()
-            val corrected = vocabulary.correct(raw)
-            val text = if (requireWakeWord) WakeWord.strip(corrected) else corrected
-            if (text != null) {
-                transcript.value = transcript.value + ("Vous" to text)
-                controller.onFinalUtterance(text.ifBlank { "Oui ?" })
-            }
-        },
-        onError = { lastError.value = it; signal(PresenceSignal.Failure(it)) },
-        onLevel = { audioLevel.value = PresenceReducer.audioLevel(it) },
+    /** Dossier du modèle Parakeet s'il est installé et activé (sinon : reconnaissance Android). */
+    @Volatile var parakeetDir: () -> java.io.File? = { null }
+
+    private val onPartialCb: (String) -> Unit = { partialTranscript.value = it; touch(); signal(PresenceSignal.PartialTranscript) }
+    private val onSpeechStartCb: () -> Unit = { controller.onUserSpeechStarted() }
+    private val onFinalCb: (String) -> Unit = { raw ->
+        partialTranscript.value = ""; touch()
+        val corrected = vocabulary.correct(raw)
+        val text = if (requireWakeWord) WakeWord.strip(corrected) else corrected
+        if (text != null) {
+            transcript.value = transcript.value + ("Vous" to text)
+            controller.onFinalUtterance(text.ifBlank { "Oui ?" })
+        }
+    }
+    private val onErrorCb: (String) -> Unit = { lastError.value = it; signal(PresenceSignal.Failure(it)) }
+    private val onLevelCb: (Float) -> Unit = { audioLevel.value = PresenceReducer.audioLevel(it) }
+
+    private val androidInput: AndroidSpeechInput = AndroidSpeechInput(
+        context, onPartial = onPartialCb, onSpeechStart = onSpeechStartCb, onFinal = onFinalCb, onError = onErrorCb, onLevel = onLevelCb,
     )
+    private var parakeet: ParakeetSpeechInput? = null
+
+    /** Choisit le moteur au démarrage de chaque session : Parakeet s'il est installé, sinon Android. */
+    private inner class InputSwitch {
+        private var active: Any? = null
+        fun start() {
+            val dir = parakeetDir()?.takeIf { ParakeetEngine.isInstalled(it) }
+            active = if (dir != null) (parakeet?.takeIf { true } ?: ParakeetSpeechInput(dir, onPartialCb, onSpeechStartCb, onFinalCb, onErrorCb, onLevelCb)
+                .also { parakeet = it }).also { it.start() }
+            else androidInput.also { it.start() }
+        }
+        fun stop() { when (val a = active) { is ParakeetSpeechInput -> a.stop(); is AndroidSpeechInput -> a.stop() }; active = null }
+        fun pause() { when (val a = active) { is ParakeetSpeechInput -> a.pause(); is AndroidSpeechInput -> a.pause() } }
+        fun resume() { when (val a = active) { is ParakeetSpeechInput -> a.resume(); is AndroidSpeechInput -> a.resume() } }
+    }
+    private val input = InputSwitch()
+
+    /** Précharge la reconnaissance hors-ligne (appelé au démarrage de la veille). */
+    fun warmUpRecognizer() {
+        val dir = parakeetDir()?.takeIf { ParakeetEngine.isInstalled(it) } ?: return
+        (parakeet ?: ParakeetSpeechInput(dir, onPartialCb, onSpeechStartCb, onFinalCb, onErrorCb, onLevelCb).also { parakeet = it }).warmUp()
+    }
 
     init {
         scope.launch {

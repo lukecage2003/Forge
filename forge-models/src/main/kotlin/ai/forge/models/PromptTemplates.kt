@@ -107,6 +107,23 @@ data class DownloadableModel(
             license = "Apache 2.0 (Alpha Cephei)", ramMb = 150, quality = 0, contextTokens = 0,
         )
 
+        /**
+         * Reconnaissance vocale Parakeet TDT 0.6B v3 (NVIDIA, CC-BY 4.0), export sherpa-onnx int8 :
+         * français parmi 25 langues, ponctuation et majuscules incluses. Quatre fichiers, 670 Mo.
+         */
+        private const val PARAKEET_BASE = "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/"
+        private fun parakeet(file: String, size: Long, sha: String) = DownloadableModel(
+            id = "parakeet-v3-$file", displayName = "Reconnaissance Parakeet", tagline = "Comprend mieux, hors-ligne",
+            url = PARAKEET_BASE + file, fileName = file, sizeBytes = size, sha256 = sha,
+            license = "CC-BY 4.0 (NVIDIA) · sherpa-onnx Apache 2.0", ramMb = 900, quality = 0, contextTokens = 0,
+        )
+        val PARAKEET_FILES = listOf(
+            parakeet("encoder.int8.onnx", 652_282_294, "1afbe69c1ffdabee94755f42e4daf1d93549131a3da11356bda84fcef0f2c479"),
+            parakeet("decoder.int8.onnx", 11_845_274, "0222a86147299d4dee90edf95b6d13827edb42ad8b7c9cf0b2582f030937c0b5"),
+            parakeet("joiner.int8.onnx", 6_355_277, "cbd02f3696e9944970111fb439d9c3fd365a80374565f13f2b9c7007d253fc98"),
+            parakeet("tokens.txt", 93_939, "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"),
+        )
+
         val RECOMMENDED = GEMMA4_E4B
         val CATALOG = listOf(GEMMA4_E4B, GEMMA4_E2B, QWEN25_1_5B)
         fun byFileName(name: String) = CATALOG.firstOrNull { it.fileName == name }

@@ -1,5 +1,24 @@
 # Historique des versions
 
+## 0.9.0 — 18/11/2026
+- **Réactivité sur le Galaxy S25** :
+  - le cerveau reste chargé quand Forge passe en arrière-plan (avant : déchargé à chaque fois,
+    puis plusieurs secondes de rechargement à la question suivante) ; préchargé dès la veille ;
+  - instructions fixes d'une question à l'autre : le moteur réutilise la conversation déjà lue
+    au lieu de tout relire (avant : relecture complète à chaque changement de sujet ou de canal) ;
+  - historique raccourci par blocs (début de conversation stable) ;
+  - réponses plus directes : l'essentiel dès la première phrase ;
+  - voix : première phrase prononcée tout de suite, et le modèle continue d'écrire pendant qu'il parle.
+- **Diagnostic de vitesse** (Réglages) : premier mot, recherche et vitesse d'écriture mesurés sur
+  le téléphone, test du cerveau, conseil de modèle plus rapide si besoin.
+- **Reconnaissance Parakeet hors-ligne** (NVIDIA, CC-BY 4.0, 670 Mo, option) : comprend mieux les
+  longues phrases, les noms et la ponctuation ; transcription en direct ; rien ne quitte le téléphone.
+- **Réveil écran éteint** (option) : « Forge » allume l'écran et affiche la bulle par-dessus le
+  verrouillage.
+- **Tuile des réglages rapides** et **widget** « Parler à Forge ».
+- **Mémoire des projets** : « mon projet s'appelle… », « je travaille sur… », l'avancement de
+  Primestone… sont notés automatiquement et rappelés dès que le projet est cité.
+
 ## 0.8.2 — 18/11/2026
 - **Bulle : correction de l'affichage en haut de l'écran.**
   - En veille, plus de capsule noire permanente sur la barre d'état : la bulle n'apparaît qu'au

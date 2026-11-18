@@ -15,8 +15,8 @@ android {
         // Galaxy S25 : Android 15 (One UI 7) et ultérieur. minSdk 31 conserve une marge raisonnable.
         minSdk = 31
         targetSdk = 35
-        versionCode = 11
-        versionName = "0.8.2"
+        versionCode = 12
+        versionName = "0.9.0"
         // Galaxy S25 = arm64-v8a. Ajouter « x86_64 » pour un émulateur de développement.
         ndk { abiFilters += listOf("arm64-v8a") }
     }
@@ -81,6 +81,8 @@ dependencies {
     implementation(libs.work.runtime)
     // Mot d'appel « Forge » hors-ligne (Vosk, Apache 2.0) et détection de l'app au premier plan.
     implementation(libs.vosk.android)
+    // Reconnaissance vocale hors-ligne (sherpa-onnx, Apache 2.0) : AAR officiel réduit à arm64-v8a.
+    implementation(files("libs/sherpa-onnx-1.12.15-arm64.aar"))
     implementation(libs.lifecycle.process)
 
     testImplementation(kotlin("test"))

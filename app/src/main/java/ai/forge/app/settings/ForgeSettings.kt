@@ -43,6 +43,8 @@ data class ForgeSettings(
     val islandIdleVisible: Boolean = false,
     /** Veille aussi écran éteint (processeur maintenu éveillé : consomme plus de batterie). */
     val wakeScreenOff: Boolean = false,
+    /** Reconnaissance vocale Parakeet (hors-ligne) quand elle est installée. */
+    val useParakeet: Boolean = true,
     /** Veille : Forge se réveille quand on dit « Forge ». */
     val wakeStandby: Boolean = false,
     /** Exigence du détecteur (0,4 sensible … 0,8 strict). */
@@ -79,6 +81,7 @@ data class ForgeSettings(
                 islandEnabled = p.getBoolean("island", true),
                 islandIdleVisible = p.getBoolean("islandIdle", false),
                 wakeScreenOff = p.getBoolean("wakeScreenOff", false),
+                useParakeet = p.getBoolean("useParakeet", true),
                 wakeStandby = p.getBoolean("wakeStandby", false),
                 wakeStrictness = p.getFloat("wakeStrictness", 0.55f).toDouble(),
             )
@@ -101,7 +104,7 @@ data class ForgeSettings(
             .putFloat("cloudBudget", cloudMonthlyBudget?.toFloat() ?: -1f)
             .putString("searxngUrl", searxngUrl)
             .putBoolean("wakeWord", requireWakeWord).putBoolean("bargeIn", bargeInWithoutHeadset).putBoolean("networkVoices", networkVoices).putBoolean("rateMigrated", true).putBoolean("briefing", morningBriefing).putString("neuralVoice", neuralVoicePath)
-            .putBoolean("island", islandEnabled).putBoolean("islandIdle", islandIdleVisible).putBoolean("wakeScreenOff", wakeScreenOff).putBoolean("wakeStandby", wakeStandby).putFloat("wakeStrictness", wakeStrictness.toFloat())
+            .putBoolean("island", islandEnabled).putBoolean("islandIdle", islandIdleVisible).putBoolean("wakeScreenOff", wakeScreenOff).putBoolean("useParakeet", useParakeet).putBoolean("wakeStandby", wakeStandby).putFloat("wakeStrictness", wakeStrictness.toFloat())
             .apply()
     }
 }
