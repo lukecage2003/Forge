@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.transform
 
 /** Relie micro Android, synthèse vocale et cerveau (orchestrateur). */
 class VoiceCoordinator(
@@ -65,8 +66,15 @@ class VoiceCoordinator(
         source = ResponseSource { utterance ->
             responseText.value = ""
             orchestrator().handle(utterance, conversation(), voice = true)
-                .filterIsInstance<OrchestratorEvent.Token>()
-                .map { touch(); responseText.value = responseText.value + it.text; it.text }
+                .transform { e ->
+                    // Un échec est dit à voix haute : jamais de silence inexpliqué.
+                    val text = when (e) {
+                        is OrchestratorEvent.Token -> e.text
+                        is OrchestratorEvent.Failed -> "Désolé, je n'ai pas pu répondre. ${e.reason.take(160)}"
+                        else -> null
+                    }
+                    if (text != null) { touch(); responseText.value = responseText.value + text; emit(text) }
+                }
         },
         onInterruptedPartial = { conversation().addInterruptedAssistant(it) },
         onSessionEnd = { input.stop() },

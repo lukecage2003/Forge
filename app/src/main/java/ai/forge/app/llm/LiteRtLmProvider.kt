@@ -33,8 +33,13 @@ import java.io.File
 class LiteRtLmProvider(
     private val modelPath: String,
     private val cacheDir: String,
-    private val maxTokens: Int = 8_192,
+    private val maxTokens: Int = 4_096,
     quality: Int = 3,
+    /**
+     * Repli sur le processeur si le GPU refuse. Désactivé pour les gros modèles : sur le CPU,
+     * un modèle de 4 Go sature tous les cœurs et fait ramer tout le téléphone.
+     */
+    private val allowCpu: Boolean = true,
     override val id: String = "local-litertlm",
     override val displayName: String = "Gemma (sur le téléphone)",
 ) : LlmProvider {
@@ -61,8 +66,9 @@ class LiteRtLmProvider(
             // Ordre d'essai : GPU grand contexte → GPU contexte standard → CPU. Le premier qui démarre gagne.
             // Essais : vision activée d'abord (Gemma 4 voit les images), puis sans vision ; GPU puis CPU.
             data class Attempt(val gpu: Boolean, val vision: Boolean, val tokens: Int)
-            val attempts = listOf(Attempt(true, true, maxTokens), Attempt(true, true, 4_096), Attempt(true, false, maxTokens), Attempt(true, false, 4_096),
-                Attempt(false, true, 4_096), Attempt(false, false, 4_096)).distinct()
+            // Contexte 4k : moins de mémoire, lecture plus rapide ; vision tentée puis abandonnée si refusée.
+            val attempts = (listOf(Attempt(true, true, maxTokens), Attempt(true, false, maxTokens), Attempt(true, false, 2_048)) +
+                if (allowCpu) listOf(Attempt(false, false, 2_048)) else emptyList()).distinct()
             var lastError: Throwable? = null
             for (a in attempts) {
                 val b = if (a.gpu) Backend.GPU() else Backend.CPU()
@@ -74,7 +80,8 @@ class LiteRtLmProvider(
                 engine = e
                 return@withContext e
             }
-            throw IllegalStateException("aucune configuration n'a démarré (${lastError?.message})", lastError)
+            throw IllegalStateException(if (allowCpu) "aucune configuration n'a démarré (${lastError?.message})"
+                else "le GPU n'a pas pu charger ce modèle (mémoire insuffisante ?). Fermez quelques applications ou installez Gemma 4 · E2B, plus léger.", lastError)
         }
     }
 

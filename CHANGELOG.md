@@ -1,5 +1,18 @@
 # Historique des versions
 
+## 0.9.2 — 18/11/2026
+- **Stabilité : Forge ne doit plus faire ramer le téléphone.**
+  - En veille, seul le petit détecteur « Forge » tourne ; le cerveau et la reconnaissance sont
+    chargés au début d'une conversation, puis libérés après 2 minutes de repos en arrière-plan.
+  - Plus de repli sur le processeur pour le gros modèle (E4B) : sur le CPU il saturait tous les
+    cœurs. Contexte ramené à 4k (moins de mémoire, lecture plus rapide).
+  - Parakeet sur 2 cœurs, priorité normale, aperçu en direct allégé.
+  - Notification en direct rafraîchie au plus une fois par seconde.
+- **Plus jamais de silence inexpliqué** : si une réponse échoue, Forge le dit à voix haute.
+- **Mode rapide en ligne (option)** : avec une clé Gemini gratuite, les questions générales
+  partent vers Gemini ; souvenirs, documents et données personnelles restent sur le téléphone ;
+  sans réseau, retour automatique au modèle local.
+
 ## 0.9.1 — 18/11/2026
 - **Intégration au système (Android 16)** : la conversation s'affiche comme une notification en
   direct (bannière, puce de la barre d'état, Now Bar) au lieu d'une bulle dessinée par-dessus la

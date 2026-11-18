@@ -35,7 +35,7 @@ object ParakeetEngine {
                     joiner = File(dir, "joiner.int8.onnx").absolutePath,
                 ),
                 tokens = File(dir, "tokens.txt").absolutePath,
-                numThreads = 4,
+                numThreads = 2,                    // 2 cœurs : le reste du téléphone reste fluide
                 modelType = "nemo_transducer",
             ),
         )
@@ -61,7 +61,7 @@ class ParakeetSpeechInput(
     private val onLevel: (Float) -> Unit,
 ) {
     private val main = Handler(Looper.getMainLooper())
-    private val decoder = Executors.newSingleThreadExecutor { r -> Thread(r, "forge-parakeet").apply { priority = Thread.MAX_PRIORITY } }
+    private val decoder = Executors.newSingleThreadExecutor { r -> Thread(r, "forge-parakeet").apply { priority = Thread.NORM_PRIORITY - 1 } }
     private val interimBusy = AtomicBoolean(false)
     private val dedup = UtteranceDeduplicator()
     @Volatile private var running = false
@@ -96,7 +96,7 @@ class ParakeetSpeechInput(
         if (rec == null) { running = false; main.post { onError("Micro indisponible pour la reconnaissance hors-ligne.") }; return }
         val ns = if (NoiseSuppressor.isAvailable()) runCatching { NoiseSuppressor.create(rec.audioSessionId)?.apply { enabled = true } }.getOrNull() else null
         val aec = if (AcousticEchoCanceler.isAvailable()) runCatching { AcousticEchoCanceler.create(rec.audioSessionId)?.apply { enabled = true } }.getOrNull() else null
-        val seg = SpeechSegmenter()
+        val seg = SpeechSegmenter(interimEveryMs = 2_000)
         val shorts = ShortArray(320)                               // 20 ms
         var lastLevelAt = 0L
         try {
@@ -112,8 +112,8 @@ class ParakeetSpeechInput(
                 for (e in events) when (e) {
                     is SpeechSegmenter.Event.SpeechStart -> main.post { onSpeechStart() }
                     is SpeechSegmenter.Event.Interim -> if (interimBusy.compareAndSet(false, true)) decoder.execute {
-                        // Aperçu en direct : seulement les 10 dernières secondes (coût constant).
-                        val tail = if (e.audio.size > 160_000) e.audio.copyOfRange(e.audio.size - 160_000, e.audio.size) else e.audio
+                        // Aperçu en direct : seulement les 6 dernières secondes (coût faible et constant).
+                        val tail = if (e.audio.size > 96_000) e.audio.copyOfRange(e.audio.size - 96_000, e.audio.size) else e.audio
                         runCatching { decode(tail) }.onSuccess { t -> seg.lastInterim = t; if (t.isNotBlank()) main.post { onPartial(t) } }
                         interimBusy.set(false)
                     }

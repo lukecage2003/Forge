@@ -16,6 +16,7 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.sample
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 /**
@@ -51,7 +52,8 @@ class LiveUpdate(private val context: Context, private val container: AppContain
         val v = container.voice
         job = scope.launch {
             combine(v.presence, v.partialTranscript, v.responseText) { p, heard, reply -> Triple(p, heard, reply) }
-                .sample(350)
+                .sample(900)
+                .distinctUntilChanged()
                 .collect { (p, heard, reply) -> runCatching { nm.notify(ID, build(p, heard, reply)) } }
         }
     }

@@ -15,6 +15,11 @@ data class RoutingPolicy(
     val maxRelativeCost: Int = 5,
     /** Réseau disponible ? (faux = mode hors-ligne : seuls les moteurs sur l'appareil restent). */
     val networkAvailable: Boolean = true,
+    /**
+     * Mode rapide : un moteur en ligne autorisé passe AVANT le modèle du téléphone (qui reste
+     * utilisé hors-ligne et pour tout ce que la politique de données interdit d'envoyer).
+     */
+    val preferCloud: Boolean = false,
 )
 
 data class RoutingNeeds(
@@ -46,7 +51,7 @@ class ProviderRouter(
             c.locality != Locality.ON_DEVICE && !policy.networkAvailable -> "réseau indisponible"
             c.relativeCost > policy.maxRelativeCost -> "coût supérieur au plafond"
             c.locality == Locality.CLOUD && policy.localOnly -> "mode strictement local"
-            c.locality == Locality.CLOUD && policy.cloudForDeepWorkOnly && !deepWork -> "cloud réservé au travail approfondi"
+            c.locality == Locality.CLOUD && policy.cloudForDeepWorkOnly && !policy.preferCloud && !deepWork -> "cloud réservé au travail approfondi"
             c.locality == Locality.CLOUD -> when (val v = egress.check(p.id, needs.task, needs.dataClass)) {
                 is EgressPolicy.Verdict.Refused -> v.reason
                 EgressPolicy.Verdict.Allowed -> usage.blockReason(p.id)
@@ -64,7 +69,8 @@ class ProviderRouter(
         }
         return providers.filter { exclusionReason(it, needs) == null }
             .sortedWith(
-                compareByDescending<LlmProvider> { it.capabilities.reasoningQuality >= requiredQuality }
+                compareByDescending<LlmProvider> { policy.preferCloud && it.capabilities.locality == Locality.CLOUD }
+                    .thenByDescending { it.capabilities.reasoningQuality >= requiredQuality }
                     .thenBy { it.capabilities.locality.ordinal }          // local d'abord
                     .thenByDescending { it.capabilities.reasoningQuality }
                     .thenBy { it.capabilities.relativeCost }

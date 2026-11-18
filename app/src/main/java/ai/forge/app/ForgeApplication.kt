@@ -67,6 +67,10 @@ class ForgeApplication : Application(), androidx.work.Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.addObserver(object : androidx.lifecycle.DefaultLifecycleObserver {
+            override fun onStart(owner: androidx.lifecycle.LifecycleOwner) = container.onAppVisibility(true)
+            override fun onStop(owner: androidx.lifecycle.LifecycleOwner) = container.onAppVisibility(false)
+        })
     }
 
     override fun onTrimMemory(level: Int) {
@@ -188,7 +192,7 @@ class AppContainer(val app: Application) {
                 val name = java.io.File(p).name
                 val known = DownloadableModel.byFileName(name)
                 when (LocalRuntime.forFile(name)) {
-                    LocalRuntime.LITERT_LM -> LiteRtLmProvider(p, app.cacheDir.absolutePath, quality = known?.quality ?: 3,
+                    LocalRuntime.LITERT_LM -> LiteRtLmProvider(p, app.cacheDir.absolutePath, quality = known?.quality ?: 3, allowCpu = (known?.ramMb ?: 0) <= 3_500,
                         displayName = "${known?.displayName ?: "Modèle local"} (sur le téléphone)")
                     LocalRuntime.MEDIAPIPE -> MediaPipeLocalProvider(app, p)
                 }
@@ -206,6 +210,24 @@ class AppContainer(val app: Application) {
 
     /** Pression mémoire signalée par Android : on libère le modèle local (rechargé à la demande). */
     fun onLowMemory() { releaseLocal() }
+
+    /**
+     * Au repos, le cerveau (plusieurs Go) est libéré : Forge en arrière-plan depuis 2 minutes sans
+     * conversation → la mémoire est rendue au téléphone. Il est rechargé dès qu'on lui reparle.
+     */
+    private var idleRelease: kotlinx.coroutines.Job? = null
+    fun onAppVisibility(visible: Boolean) {
+        idleRelease?.cancel()
+        if (visible) return
+        idleRelease = scope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(120_000)
+                if (voice.state.value == ai.forge.voice.VoiceState.IDLE && !wakeTurnActive.value) {
+                    releaseLocal(); ai.forge.app.voice.ParakeetEngine.release(); brainDetail.value = "En veille (mémoire libérée)"; break
+                }
+            }
+        }
+    }
 
     /** Charge le modèle en arrière-plan pour que la première réponse soit immédiate. */
     fun warmUpLocalModel() {
@@ -243,6 +265,24 @@ class AppContainer(val app: Application) {
     @Volatile var onEndWakeTurn: () -> Unit = {}
     fun endWakeTurn() = onEndWakeTurn()
 
+    /**
+     * Mode rapide avec Gemini (clé gratuite Google AI Studio, saisie par l'utilisateur) : les
+     * questions générales partent vers Gemini ; souvenirs, documents et données personnelles
+     * restent traités sur le téléphone (politique de données inchangée).
+     */
+    fun enableGeminiFastMode(key: String?) {
+        key?.takeIf { it.isNotBlank() }?.let { keys.put("oai", it.trim()) }
+        updateSettings(settings.copy(
+            fastOnline = true, localOnly = false,
+            openAiCompatibleUrl = "https://generativelanguage.googleapis.com/v1beta/openai",
+            openAiCompatibleModel = settings.openAiCompatibleModel?.takeIf { it.startsWith("gemini") } ?: "gemini-flash-latest",
+            cloudMaxDataClass = ai.forge.core.model.DataClass.GENERAL,
+            cloudTasks = setOf(ai.forge.core.model.TaskCategory.CONVERSATION, ai.forge.core.model.TaskCategory.REASONING, ai.forge.core.model.TaskCategory.RESEARCH,
+                ai.forge.core.model.TaskCategory.WRITING, ai.forge.core.model.TaskCategory.EDITORIAL, ai.forge.core.model.TaskCategory.STUDY),
+        ))
+    }
+    fun disableFastMode() = updateSettings(settings.copy(fastOnline = false))
+
     /** Mesures réelles des derniers tours (diagnostic de vitesse). */
     val turnMetrics = MutableStateFlow<List<ai.forge.reasoning.TurnMetrics>>(emptyList())
 
@@ -260,7 +300,7 @@ class AppContainer(val app: Application) {
     private fun buildOrchestrator(): Orchestrator {
         listOf("oai", "anthropic").forEach { usage.setLimits(it, UsageLimits(settings.cloudDailyRequestLimit, settings.cloudMonthlyBudget)) }
         return Orchestrator(
-            ProviderRouter(providers(), RoutingPolicy(localOnly = settings.localOnly, networkAvailable = networkAvailable.value), egress(), usage),
+            ProviderRouter(providers(), RoutingPolicy(localOnly = settings.localOnly, networkAvailable = networkAvailable.value, preferCloud = settings.fastOnline), egress(), usage),
             memory,
             actionPlanner = ActionPlanner { tools.specs() },
             actionExecutor = actionExecutor,

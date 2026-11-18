@@ -55,8 +55,9 @@ class VoiceSessionService : LifecycleService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
-        // Le cerveau est chargé dès la veille : au mot « Forge », il est déjà prêt.
-        if (intent?.action != ACTION_STOP) { container.warmUpLocalModel(); container.voice.warmUpRecognizer() }
+        // En veille, seul le petit détecteur « Forge » tourne : le cerveau et la reconnaissance ne
+        // sont chargés qu'au début d'une conversation (sinon plusieurs Go occupés en permanence).
+        if (intent?.action == null) { container.warmUpLocalModel(); container.voice.warmUpRecognizer() }
         when (intent?.action) {
             ACTION_STOP -> { shutdown(); return START_NOT_STICKY }
             ACTION_END_TURN -> { endTurnEarly(); return START_STICKY }
@@ -103,6 +104,8 @@ class VoiceSessionService : LifecycleService() {
         lingerJob?.cancel(); lingering = false
         inTurn = true
         container.wakeTurnActive.value = true
+        // Chargement pendant que l'utilisateur formule sa question.
+        container.warmUpLocalModel(); container.voice.warmUpRecognizer()
         showOverLockScreen()
         runCatching { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 35).startTone(ToneGenerator.TONE_PROP_ACK, 120) }
         overlay?.expanded?.value = true

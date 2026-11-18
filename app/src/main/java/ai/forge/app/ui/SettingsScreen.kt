@@ -82,6 +82,25 @@ fun SettingsScreen(container: AppContainer) {
         item { SpeedSection(container) }
 
         item {
+            Section("Mode rapide en ligne") {
+                var geminiKey by remember { mutableStateOf("") }
+                val on = s.fastOnline && container.keys.get("oai") != null
+                Hint("Pour des réponses aussi rapides que Gemini : les questions générales partent vers Gemini (Google). " +
+                    "Vos souvenirs, documents et données personnelles restent traités sur le téléphone, et sans réseau Forge repasse en local.")
+                if (on) Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Activé · ${s.openAiCompatibleModel}", Modifier.weight(1f), color = ForgePalette.GoldSoft)
+                    TextButton(onClick = { container.disableFastMode(); s = container.settings }) { Text("Désactiver", color = ForgePalette.TextMuted) }
+                } else {
+                    Hint("1. Créez une clé gratuite sur aistudio.google.com (bouton « Get API key »). 2. Collez-la ici.")
+                    Field(geminiKey, "Clé Gemini (Google AI Studio)") { geminiKey = it }
+                    GoldButton("Activer le mode rapide", Modifier.fillMaxWidth(), enabled = geminiKey.isNotBlank() || container.keys.get("oai") != null) {
+                        container.enableGeminiFastMode(geminiKey); geminiKey = ""; s = container.settings
+                    }
+                }
+            }
+        }
+
+        item {
             Section("Autres moteurs (facultatif)") {
                 Field(s.lanServerUrl.orEmpty(), "PC à la maison (Ollama) — ex. http://192.168.1.10:11434/v1") { s = s.copy(lanServerUrl = it.ifBlank { null }) }
                 Field(s.lanModel.orEmpty(), "Modèle sur le PC (ex. qwen3:8b)") { s = s.copy(lanModel = it.ifBlank { null }) }
