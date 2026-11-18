@@ -331,3 +331,22 @@ class TurnMetricsTest {
         assertEquals(1, got.size); assertEquals(false, got.single().failed); assertTrue(got.single().chars > 0)
     }
 }
+
+class ProjectMemoryTest {
+    @Test fun projectNotesAreRememberedAndRecalledLater() = runTest {
+        val p = ScriptedProvider(capabilities = ProviderCapabilities(Locality.ON_DEVICE, 8_192, reasoningQuality = 4)) { "Noté." }
+        val mem = MemoryManager(InMemoryMemoryStore(), HashingEmbedder())
+        val o = Orchestrator(ProviderRouter(listOf(p)), mem)
+        o.handle("Mon projet s'appelle Wakanda Files : une série de 5 vidéos sur le vibranium", ConversationContext("p1"), voice = false).toList()
+        assertTrue(mem.list().any { it.kind == ai.forge.memory.MemoryKind.PROJECT && it.project == "Wakanda Files" })
+        // Nouvelle conversation : il suffit de citer le projet pour que Forge s'en souvienne.
+        o.handle("Où en est Wakanda Files ?", ConversationContext("p2"), voice = false).toList()
+        assertTrue(p.requests.last().messages.joinToString("\n") { it.content }.contains("une série de 5 vidéos sur le vibranium"))
+    }
+
+    @Test fun conversationTrimsInBlocks() {
+        val c = ConversationContext("b", maxTurns = 12)
+        repeat(13) { c.add(ai.forge.core.model.ChatMessage(ai.forge.core.model.Role.USER, "m$it")) }
+        assertEquals("m6", c.turns.first().content); assertEquals(7, c.turns.size)
+    }
+}

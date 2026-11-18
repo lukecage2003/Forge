@@ -33,7 +33,9 @@ class ConversationContext(val id: String, private val maxTurns: Int = 24) {
     private val _turns = ArrayDeque<ChatMessage>()
     val turns: List<ChatMessage> get() = _turns.toList()
     var project: String? = null
-    fun add(m: ChatMessage) { _turns.addLast(m); while (_turns.size > maxTurns) _turns.removeFirst() }
+    // Au-delà de la limite, on retire un bloc de 6 messages d'un coup (et non un par tour) : le début
+    // de conversation reste stable et le moteur local peut réutiliser ce qu'il a déjà lu.
+    fun add(m: ChatMessage) { _turns.addLast(m); if (_turns.size > maxTurns) repeat(minOf(6, _turns.size - 1)) { _turns.removeFirst() } }
     /** Une réponse interrompue est conservée tronquée et marquée comme telle (contexte honnête). */
     fun addInterruptedAssistant(partial: String) {
         if (partial.isNotBlank()) add(ChatMessage(Role.ASSISTANT, "$partial […interrompu par l'utilisateur]"))
@@ -86,6 +88,8 @@ class Orchestrator(
      * [images] : images jointes à la question ; [imageText] : texte lu sur ces images (OCR), utilisé
      * si aucun moteur disponible ne « voit » les images — Forge le dit alors, sans rien inventer.
      */
+    private val projects = ai.forge.memory.ProjectTracker()
+
     /** Reçoit les mesures de chaque tour terminé (écran de diagnostic). */
     @Volatile var onTurnMetrics: ((TurnMetrics) -> Unit)? = null
 
@@ -106,6 +110,19 @@ class Orchestrator(
         // 1. Mémoire : uniquement ce que l'utilisateur veut explicitement conserver.
         extractor.extract(input, ctx.id, ctx.project).forEach { emit(OrchestratorEvent.MemoryEvent(memory.remember(it))) }
 
+        // 1 bis. Mémoire des projets : avancement noté automatiquement, projet courant retenu.
+        val projectOutcome = runCatching {
+            val knownProjects = memory.list().filter { it.kind == ai.forge.memory.MemoryKind.PROJECT }.mapNotNull { it.project }.toSet()
+            projects.detect(input, knownProjects)?.let { note ->
+                ctx.project = note.project
+                memory.remember(ai.forge.memory.MemoryCandidate(
+                    kind = ai.forge.memory.MemoryKind.PROJECT, text = "Projet « ${note.project} » : ${note.text}",
+                    provenance = ai.forge.memory.Provenance(ai.forge.memory.Provenance.Type.CONVERSATION, ctx.id, note.text),
+                    project = note.project, tags = setOf("projet"), needsConfirmation = false))
+            } ?: run { projects.mentioned(input, knownProjects)?.let { ctx.project = it }; null }
+        }.getOrNull()
+        projectOutcome?.let { emit(OrchestratorEvent.MemoryEvent(it)) }
+
         // 2. Intention et profondeur.
         val intent = analyzer.analyze(input).let { if (forcedDepth != null) it.copy(depth = forcedDepth, needsVerification = forcedDepth.verify) else it }
         val primary = Specialists[intent.primary]
@@ -121,8 +138,9 @@ class Orchestrator(
         }
 
         // 3. Rappel mémoire ciblé, AVANT le choix du moteur : le contenu décide de qui peut le recevoir.
-        val hits = if (primary.memoryKinds.isEmpty()) emptyList()
-            else memory.recall(MemoryQuery(input, primary.memoryKinds, limit = 6))
+        val projectHits = ctx.project?.let { p -> memory.recall(MemoryQuery(input, setOf(ai.forge.memory.MemoryKind.PROJECT), project = p, limit = 4)) }.orEmpty()
+        val hits = (projectHits + if (primary.memoryKinds.isEmpty()) emptyList()
+            else memory.recall(MemoryQuery(input, primary.memoryKinds, limit = 6))).distinctBy { it.item.id }
         val dataClass = classify(intent, hits)
         val (recalled, externalUsed) = buildMemoryContext(hits) { src, findings ->
             emit(OrchestratorEvent.SecurityWarning(src, findings))
