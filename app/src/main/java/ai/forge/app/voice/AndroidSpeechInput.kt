@@ -27,6 +27,7 @@ class AndroidSpeechInput(
     private val onSpeechStart: () -> Unit,
     private val onFinal: (String) -> Unit,
     private val onError: (String) -> Unit,
+    private val onLevel: (Float) -> Unit = {},
 ) {
     private val main = Handler(Looper.getMainLooper())
     private var recognizer: SpeechRecognizer? = null
@@ -79,7 +80,7 @@ class AndroidSpeechInput(
     private val listener = object : RecognitionListener {
         override fun onReadyForSpeech(params: Bundle?) = Unit
         override fun onBeginningOfSpeech() { onSpeechStart() }
-        override fun onRmsChanged(rmsdB: Float) = Unit
+        override fun onRmsChanged(rmsdB: Float) { onLevel(rmsdB) }
         override fun onBufferReceived(buffer: ByteArray?) = Unit
         override fun onEndOfSpeech() = Unit
         override fun onEvent(eventType: Int, params: Bundle?) = Unit

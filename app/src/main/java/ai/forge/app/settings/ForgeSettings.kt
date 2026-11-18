@@ -1,6 +1,8 @@
 package ai.forge.app.settings
 
 import ai.forge.core.model.AutonomyLevel
+import ai.forge.core.model.DataClass
+import ai.forge.core.model.TaskCategory
 import android.content.Context
 
 /** Réglages non secrets (moteurs, autonomie, voix). Les clés API vont dans [SecureKeyStore]. */
@@ -17,6 +19,11 @@ data class ForgeSettings(
     val voiceName: String? = null,
     val speechRate: Float = 1.0f,
     val showTranscript: Boolean = true,
+    /** Ce que les fournisseurs cloud peuvent recevoir (§14) — restrictif par défaut. */
+    val cloudMaxDataClass: DataClass = DataClass.GENERAL,
+    val cloudTasks: Set<TaskCategory> = setOf(TaskCategory.CONVERSATION, TaskCategory.REASONING, TaskCategory.WRITING),
+    val cloudDailyRequestLimit: Int? = 100,
+    val cloudMonthlyBudget: Double? = null,
 ) {
     companion object {
         private const val FILE = "forge_settings"
@@ -34,6 +41,11 @@ data class ForgeSettings(
                 voiceName = p.getString("voiceName", null),
                 speechRate = p.getFloat("speechRate", 1.0f),
                 showTranscript = p.getBoolean("showTranscript", true),
+                cloudMaxDataClass = runCatching { DataClass.valueOf(p.getString("cloudData", null)!!) }.getOrDefault(DataClass.GENERAL),
+                cloudTasks = p.getStringSet("cloudTasks", null)?.mapNotNull { runCatching { TaskCategory.valueOf(it) }.getOrNull() }?.toSet()
+                    ?: setOf(TaskCategory.CONVERSATION, TaskCategory.REASONING, TaskCategory.WRITING),
+                cloudDailyRequestLimit = p.getInt("cloudDaily", 100).takeIf { it > 0 },
+                cloudMonthlyBudget = p.getFloat("cloudBudget", -1f).takeIf { it >= 0 }?.toDouble(),
             )
         }
     }
@@ -48,6 +60,10 @@ data class ForgeSettings(
             .putString("autonomy", autonomyCeiling.name)
             .putString("voiceName", voiceName).putFloat("speechRate", speechRate)
             .putBoolean("showTranscript", showTranscript)
+            .putString("cloudData", cloudMaxDataClass.name)
+            .putStringSet("cloudTasks", cloudTasks.map { it.name }.toSet())
+            .putInt("cloudDaily", cloudDailyRequestLimit ?: 0)
+            .putFloat("cloudBudget", cloudMonthlyBudget?.toFloat() ?: -1f)
             .apply()
     }
 }

@@ -5,6 +5,10 @@ import ai.forge.app.voice.VoiceSessionService
 import ai.forge.core.model.AutonomyLevel
 import ai.forge.reasoning.OrchestratorEvent
 import ai.forge.voice.VoiceState
+import ai.forge.voice.PresenceSignal
+import ai.forge.voice.PresenceState
+import ai.forge.core.model.DataClass
+import ai.forge.core.model.TaskCategory
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -31,21 +35,31 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 
-private val ForgeColors = darkColorScheme(
-    primary = Color(0xFFE0A84A), secondary = Color(0xFF6FB3D2),
-    background = Color(0xFF0E1116), surface = Color(0xFF161B22), onBackground = Color(0xFFE6E6E6),
-)
 
 data class ChatLine(val author: String, val text: String, val meta: String? = null)
 
 @Composable
 fun ForgeApp(container: AppContainer) {
-    MaterialTheme(colorScheme = ForgeColors) {
+    ForgeTheme {
         var screen by remember { mutableStateOf("chat") }
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            when (screen) {
-                "chat" -> ChatScreen(container, onSettings = { screen = "settings" })
-                else -> SettingsScreen(container, onBack = { screen = "chat" })
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
+            bottomBar = {
+                NavigationBar(containerColor = ForgePalette.Surface) {
+                    listOf("chat" to (Icons.Default.Forum to "Conversation"), "actions" to (Icons.Default.Bolt to "Actions"),
+                        "settings" to (Icons.Default.Tune to "Réglages")).forEach { (id, v) ->
+                        NavigationBarItem(selected = screen == id, onClick = { screen = id },
+                            icon = { Icon(v.first, v.second) }, label = { Text(v.second) })
+                    }
+                }
+            },
+        ) { pad ->
+            Box(Modifier.padding(pad)) {
+                when (screen) {
+                    "chat" -> ChatScreen(container, onSettings = { screen = "settings" })
+                    "actions" -> ActionCenterScreen(container)
+                    else -> SettingsScreen(container, onBack = { screen = "chat" })
+                }
             }
         }
     }
@@ -79,11 +93,12 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
             val buf = StringBuilder()
             container.orchestrator.handle(text, container.conversation, voice = false).collect { e ->
                 when (e) {
+                    is OrchestratorEvent.SecurityWarning -> lines += ChatLine("Sécurité", "Contenu externe suspect ignoré comme instruction (${e.source}) : ${e.findings.joinToString()}")
                     is OrchestratorEvent.Planned -> lines[idx] = lines[idx].copy(meta = "${e.intent.primary.name.lowercase()} · ${e.intent.depth.label} · ${e.provider}")
                     is OrchestratorEvent.Token -> { buf.append(e.text); lines[idx] = lines[idx].copy(text = buf.toString()) }
                     is OrchestratorEvent.QualityReview -> lines[idx] = lines[idx].copy(meta = (lines[idx].meta ?: "") + " · contrôle : ${e.verdict}")
                     is OrchestratorEvent.MemoryEvent -> lines += ChatLine("Mémoire", e.outcome.toString().take(160))
-                    is OrchestratorEvent.Failed -> lines[idx] = lines[idx].copy(text = "⚠️ ${e.reason}")
+                    is OrchestratorEvent.Failed -> { lines[idx] = lines[idx].copy(text = "⚠️ ${e.reason}"); container.voice.signal(PresenceSignal.Failure(e.reason)) }
                     else -> Unit
                 }
             }
@@ -105,7 +120,7 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
         },
     ) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {
-            VoiceIndicator(if (voiceOn) voiceState else VoiceState.IDLE, partial, voiceError)
+            VoiceIndicator(container, voiceOn, partial, voiceError, container.settings.showTranscript)
             LazyColumn(Modifier.weight(1f).padding(horizontal = 12.dp), state = listState) {
                 items(lines) { l -> MessageBubble(l) }
             }
@@ -127,22 +142,19 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
 }
 
 @Composable
-private fun VoiceIndicator(state: VoiceState, partial: String, error: String?) {
-    val (label, color) = when (state) {
-        VoiceState.IDLE -> "Micro coupé" to Color.Gray
-        VoiceState.LISTENING -> "J'écoute" to Color(0xFF4CAF50)
-        VoiceState.THINKING -> "Je réfléchis" to Color(0xFFE0A84A)
-        VoiceState.SPEAKING -> "Je parle — parlez pour m'interrompre" to Color(0xFF6FB3D2)
-    }
-    val pulse by rememberInfiniteTransition(label = "pulse").animateFloat(
-        0.85f, 1.15f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "scale")
+private fun VoiceIndicator(container: AppContainer, voiceOn: Boolean, partial: String, error: String?, showTranscript: Boolean) {
+    val presence by container.voice.presence.collectAsState()
+    val level by container.voice.audioLevel.collectAsState()
+    val online by container.networkAvailable.collectAsState()
+    val state = if (voiceOn) presence else PresenceState.STANDBY
     Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(14.dp).scale(if (state == VoiceState.IDLE) 1f else pulse).clip(CircleShape).background(color))
-        Spacer(Modifier.width(10.dp))
-        Column {
-            Text(label, color = color, style = MaterialTheme.typography.labelLarge)
-            if (partial.isNotBlank()) Text(partial, style = MaterialTheme.typography.bodySmall)
-            error?.let { Text(it, color = Color(0xFFE57373), style = MaterialTheme.typography.bodySmall) }
+        ForgeOrb(state, level, size = 48.dp)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(if (voiceOn) state.label else "Micro coupé", color = ForgePalette.Gold, style = MaterialTheme.typography.labelLarge)
+            if (showTranscript && partial.isNotBlank()) Text(partial, style = MaterialTheme.typography.bodySmall)
+            error?.let { Text(it, color = ForgePalette.Error, style = MaterialTheme.typography.bodySmall) }
+            if (!online) Text("Hors-ligne : seules les fonctions locales sont disponibles.", color = ForgePalette.TextMuted, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
@@ -163,6 +175,8 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
     var s by remember { mutableStateOf(container.settings) }
     var anthropicKey by remember { mutableStateOf("") }
     var oaiKey by remember { mutableStateOf("") }
+    var testResult by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     Scaffold(topBar = {
         TopAppBar(title = { Text("Réglages") }, navigationIcon = {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Retour") }
@@ -188,6 +202,38 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
                     Text("Mode strictement local (aucun appel cloud)")
                 }
             }
+            item {
+                // §14 : tester réellement chaque moteur configuré (appel de disponibilité, aucune donnée privée envoyée).
+                OutlinedButton(onClick = {
+                    scope.launch {
+                        testResult = container.providers().joinToString("\n") { p ->
+                            "${p.displayName} : " + p.testConnection().fold({ it }, { "échec — ${it.message}" })
+                        }.ifEmpty { "Aucun moteur configuré." }
+                    }
+                }) { Text("Tester les connexions") }
+                testResult?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            }
+            item { Text("Fournisseurs externes (cloud)", style = MaterialTheme.typography.titleMedium) }
+            item { Text("Données qu'ils peuvent recevoir. Les comics, Drive et cours ne partent jamais sans votre accord explicite ici.",
+                style = MaterialTheme.typography.bodySmall, color = ForgePalette.TextMuted) }
+            items(listOf(DataClass.GENERAL, DataClass.PERSONAL, DataClass.PRIVATE_DOCUMENTS)) { dc ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(s.cloudMaxDataClass == dc, { s = s.copy(cloudMaxDataClass = dc) })
+                    Text(when (dc) { DataClass.GENERAL -> "Demande seule (recommandé)"; DataClass.PERSONAL -> "Demande + souvenirs personnels"
+                        else -> "Demande + souvenirs + documents privés" })
+                }
+            }
+            item { Text("Tâches autorisées pour le cloud", style = MaterialTheme.typography.labelLarge) }
+            items(TaskCategory.entries.toList()) { t ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(t in s.cloudTasks, { on -> s = s.copy(cloudTasks = if (on) s.cloudTasks + t else s.cloudTasks - t) })
+                    Text(t.label)
+                }
+            }
+            item { OutlinedTextField((s.cloudDailyRequestLimit ?: 0).toString(), { v -> s = s.copy(cloudDailyRequestLimit = v.toIntOrNull()?.takeIf { it > 0 }) },
+                label = { Text("Limite de requêtes cloud par jour (0 = aucune)") }, modifier = Modifier.fillMaxWidth()) }
+            item { Text("Usage : " + listOf("oai", "anthropic").joinToString(" · ") { container.usage.summary(it) },
+                style = MaterialTheme.typography.bodySmall, color = ForgePalette.TextMuted) }
             item { Text("Plafond d'autonomie", style = MaterialTheme.typography.titleMedium) }
             items(AutonomyLevel.entries.toList()) { lvl ->
                 Row(verticalAlignment = Alignment.CenterVertically) {

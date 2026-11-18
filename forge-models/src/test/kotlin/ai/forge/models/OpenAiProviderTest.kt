@@ -71,3 +71,23 @@ class OpenAiProviderTest {
         }
     }
 }
+
+class ConnectionTest {
+    @Test fun testConnectionReallyCallsTheServiceAndAvailabilityIsCached() = kotlinx.coroutines.test.runTest {
+        okhttp3.mockwebserver.MockWebServer().use { server ->
+            server.enqueue(okhttp3.mockwebserver.MockResponse().setBody("{\"data\":[]}"))
+            server.enqueue(okhttp3.mockwebserver.MockResponse().setResponseCode(401))
+            server.start()
+            val p = OpenAiCompatibleProvider("x", "x", server.url("/v1").toString(), "m",
+                capabilities = ProviderCapabilities(Locality.LOCAL_NETWORK, 8192))
+            kotlin.test.assertTrue(p.isAvailable())
+            kotlin.test.assertTrue(p.isAvailable())          // en cache : pas de 2e appel
+            kotlin.test.assertEquals(1, server.requestCount)
+            kotlin.test.assertTrue(p.testConnection().isFailure) // le test réel voit le 401
+            val a = AnthropicProvider("k", baseUrl = server.url("").toString().trimEnd('/'))
+            server.enqueue(okhttp3.mockwebserver.MockResponse().setBody("{}"))
+            kotlin.test.assertTrue(a.testConnection().isSuccess)
+            kotlin.test.assertEquals("/v1/models", server.takeRequest().path.let { server.takeRequest(); server.takeRequest().path })
+        }
+    }
+}

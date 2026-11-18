@@ -21,6 +21,15 @@ import ai.forge.memory.HashingEmbedder
 import ai.forge.memory.MemoryManager
 import ai.forge.reasoning.ConversationContext
 import ai.forge.reasoning.Orchestrator
+import ai.forge.actions.ActionEngine
+import ai.forge.models.UsageLimits
+import ai.forge.models.UsageMeter
+import ai.forge.security.EgressPolicy
+import ai.forge.security.ExternalProviderGrant
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import kotlinx.coroutines.flow.MutableStateFlow
 import ai.forge.security.PermissionGate
 import ai.forge.security.ToolRegistry
 import android.app.Application
@@ -52,6 +61,13 @@ class AppContainer(private val app: Application) {
 
     val gate = PermissionGate(settings.autonomyCeiling)
     val tools = ToolRegistry(listOf(SetAlarmTool(app), CalendarDraftTool(app), ShareTextTool(app), OpenAppTool(app)))
+    /** Action Center : journal + arrêt d'urgence (§11). */
+    val actions = ActionEngine(tools, gate)
+    val usage = UsageMeter()
+    val networkAvailable = MutableStateFlow(true)
+
+    /** Arrêt d'urgence global : voix ET actions. */
+    fun emergencyStop() { voice.stop(); actions.engageKillSwitch() }
 
     var conversation = ConversationContext(UUID.randomUUID().toString())
         private set
@@ -75,10 +91,19 @@ class AppContainer(private val app: Application) {
         keys.get("anthropic")?.let { add(AnthropicProvider(it, settings.anthropicModel)) }
     }
 
-    private fun buildOrchestrator() = Orchestrator(
-        ProviderRouter(providers(), RoutingPolicy(localOnly = settings.localOnly)),
-        memory,
-    )
+    private fun egress() = EgressPolicy(listOf("oai", "anthropic").map {
+        ExternalProviderGrant(it, settings.cloudTasks, settings.cloudMaxDataClass)
+    })
+
+    private fun buildOrchestrator(): Orchestrator {
+        listOf("oai", "anthropic").forEach { usage.setLimits(it, UsageLimits(settings.cloudDailyRequestLimit, settings.cloudMonthlyBudget)) }
+        return Orchestrator(
+            ProviderRouter(providers(), RoutingPolicy(localOnly = settings.localOnly, networkAvailable = networkAvailable.value), egress(), usage),
+            memory,
+        )
+    }
+
+    private fun rebuild() { orchestrator = buildOrchestrator() }
 
     fun updateSettings(new: ForgeSettings) {
         settings = new
@@ -88,4 +113,16 @@ class AppContainer(private val app: Application) {
     }
 
     fun newConversation() { conversation = ConversationContext(UUID.randomUUID().toString()) }
+
+    // Déclaré en dernier : le rappel réseau peut arriver immédiatement et utilise tout ce qui précède.
+    init {
+        // Scénario H : suivre la connectivité pour basculer en local et signaler ce qui ne marche plus.
+        val cm = app.getSystemService(ConnectivityManager::class.java)
+        networkAvailable.value = cm.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+        rebuild()
+        cm.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) { networkAvailable.value = true; rebuild() }
+            override fun onLost(network: Network) { networkAvailable.value = false; rebuild() }
+        })
+    }
 }

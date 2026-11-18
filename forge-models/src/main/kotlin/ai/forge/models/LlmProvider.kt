@@ -41,7 +41,11 @@ interface LlmProvider {
     val id: String
     val displayName: String
     val capabilities: ProviderCapabilities
+    /** Vérification rapide, appelée avant chaque requête (peut s'appuyer sur un cache). */
     suspend fun isAvailable(): Boolean
+    /** Test réel de connexion (§14 « tester une connexion ») : effectue un appel au service. */
+    suspend fun testConnection(): Result<String> =
+        if (isAvailable()) Result.success("disponible") else Result.failure(IllegalStateException("indisponible"))
     fun stream(request: ChatRequest): Flow<LlmEvent>
 }
 

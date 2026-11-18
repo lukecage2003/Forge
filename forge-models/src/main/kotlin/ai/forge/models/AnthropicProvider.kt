@@ -1,7 +1,9 @@
 package ai.forge.models
 
 import ai.forge.core.model.Role
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.addJsonObject
@@ -31,7 +33,19 @@ class AnthropicProvider(
 ) : LlmProvider {
     private val json = Json { ignoreUnknownKeys = true }
 
+    /** Vérification locale (clé présente) ; le test réel est [testConnection]. */
     override suspend fun isAvailable(): Boolean = apiKey.isNotBlank()
+
+    override suspend fun testConnection(): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            val req = Request.Builder().url("$baseUrl/v1/models").header("x-api-key", apiKey)
+                .header("anthropic-version", "2023-06-01").get().build()
+            client.newCall(req).execute().use { r ->
+                check(r.isSuccessful) { "HTTP ${r.code} : ${r.body?.string()?.take(200)}" }
+                "clé valide (HTTP ${r.code})"
+            }
+        }
+    }
 
     override fun stream(request: ChatRequest): Flow<LlmEvent> = flow {
         val system = request.messages.filter { it.role == Role.SYSTEM }.joinToString("\n\n") { it.content }

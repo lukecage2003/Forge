@@ -1,7 +1,9 @@
 package ai.forge.models
 
 import ai.forge.core.model.Role
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
@@ -37,10 +39,25 @@ class OpenAiCompatibleProvider(
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    override suspend fun isAvailable(): Boolean = runCatching {
-        val req = Request.Builder().url(baseUrl.trimEnd('/') + "/models").apply { auth() }.get().build()
-        client.newCall(req).execute().use { it.isSuccessful }
-    }.getOrDefault(false)
+    @Volatile private var lastCheck: Pair<Long, Boolean>? = null
+
+    /** Résultat mis en cache 60 s : évite un aller-retour réseau avant chaque requête. */
+    override suspend fun isAvailable(): Boolean {
+        lastCheck?.let { (at, ok) -> if (System.currentTimeMillis() - at < 60_000) return ok }
+        val ok = testConnection().isSuccess
+        lastCheck = System.currentTimeMillis() to ok
+        return ok
+    }
+
+    override suspend fun testConnection(): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            val req = Request.Builder().url(baseUrl.trimEnd('/') + "/models").apply { auth() }.get().build()
+            client.newCall(req).execute().use { r ->
+                check(r.isSuccessful) { "HTTP ${r.code}" }
+                "joignable (HTTP ${r.code})"
+            }
+        }
+    }
 
     override fun stream(request: ChatRequest): Flow<LlmEvent> = flow {
         val body = buildJsonObject {
