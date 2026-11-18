@@ -56,7 +56,12 @@ data class EvidenceSource(
     val reference: ComicReference? = null,
     val url: String? = null,
     val description: String,
-)
+    /** La source a-t-elle pu être consultée ? (lien mort, fichier absent → false) */
+    val accessible: Boolean = true,
+) {
+    /** Une source sans référence ni lien ne peut être retrouvée par personne : elle ne compte pas. */
+    val locatable: Boolean get() = url != null || (reference != null && (reference.issue != null || reference.sourceFileId != null))
+}
 
 /** Entrée du Claim Ledger (§8.2). */
 @Serializable
@@ -70,6 +75,10 @@ data class Claim(
     val contradictions: List<String> = emptyList(),
     val status: VerificationStatus = VerificationStatus.UNVERIFIED,
     val dateIso: String? = null,
+    /** Citation exacte relevée dans la source (pour vérifier les citations des scripts). */
+    val verbatimQuote: String? = null,
+    /** Continuité ou version du personnage (ex. « Terre-616 », « Ultimate », « MCU », « New 52 »). */
+    val continuity: String? = null,
 ) {
     val bestTier: SourceTier? get() = sources.minByOrNull { it.tier.rank }?.tier
     val primaryReference: ComicReference? get() = sources.filter { it.tier.isPrimary }.mapNotNull { it.reference }.firstOrNull()

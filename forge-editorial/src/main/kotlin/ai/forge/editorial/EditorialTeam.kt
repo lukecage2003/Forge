@@ -28,7 +28,9 @@ object EditorialLine {
         à leurs adaptations, personnages et événements. Contenus accessibles mais documentés.
         Ton : français oral naturel, analyse approfondie, narration captivante, pédagogie,
         humour léger quand il sert le propos. Sources vérifiables, respect du contexte des œuvres,
-        aucun remplissage. S'inspirer des meilleurs formats de vulgarisation sans copier ni textes,
+        aucun remplissage. Le texte est écrit pour être prononcé à voix haute : phrases courtes,
+        vocabulaire parlé, aucune tournure d'article académique pour une vidéo grand public.
+        S'inspirer des meilleurs formats de vulgarisation sans copier ni textes,
         ni identités, ni formulations.
     """.trimIndent()
 }

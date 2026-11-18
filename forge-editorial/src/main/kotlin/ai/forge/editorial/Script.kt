@@ -15,6 +15,8 @@ data class ScriptSegment(
     val visuals: List<String> = emptyList(),
     /** Identifiants d'affirmations du Claim Ledger appuyant ce segment. */
     val claimIds: List<String> = emptyList(),
+    /** Continuité dont parle ce segment (ex. « Terre-616 ») ; null = non précisée. */
+    val continuity: String? = null,
 )
 
 /** Script complet (§9.4). */
@@ -77,6 +79,10 @@ object ScriptQualityControl {
         }
         if (f.kind != FormatKind.SHORT_VERTICAL && script.sources.isEmpty()) {
             add(QcIssue(QcIssue.Severity.MAJEUR, "Aucune source listée."))
+        }
+        // Texte fait pour être dit (§9.4) : signalements de style, non bloquants.
+        OralStyle.check(script.narrationText, generalPublic = f.kind != FormatKind.DOCUMENTARY).take(8).forEach {
+            add(QcIssue(QcIssue.Severity.MINEUR, "Oral — ${it.kind} : « ${it.excerpt} » → ${it.suggestion}"))
         }
         val reps = WritingAnalyzer.repetitions(script.narrationText, minCount = 6)
         if (reps.isNotEmpty()) add(QcIssue(QcIssue.Severity.MINEUR, "Répétitions : ${reps.joinToString { "${it.first} ×${it.second}" }}"))
