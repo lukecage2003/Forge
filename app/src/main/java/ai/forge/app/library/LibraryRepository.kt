@@ -32,6 +32,29 @@ class LibraryRepository(private val dir: File, private val ocr: OcrEngine) {
         save()
     }
 
+    /**
+     * Import depuis le stockage du téléphone (Storage Access Framework) : l'utilisateur choisit
+     * les fichiers, Forge n'accède à rien d'autre. Copie dans le cache privé puis indexation.
+     */
+    suspend fun indexLocal(resolver: android.content.ContentResolver, uri: android.net.Uri, name: String, onProgress: (Int, Int) -> Unit = { _, _ -> }) = lock.withLock {
+        val cache = File(dir, "local").apply { mkdirs() }
+        val tmp = File(cache, "import.tmp")
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        withContext(Dispatchers.IO) {
+            resolver.openInputStream(uri)!!.use { input -> tmp.outputStream().use { out ->
+                val buf = ByteArray(64 * 1024); var n: Int
+                while (input.read(buf).also { n = it } >= 0) { digest.update(buf, 0, n); out.write(buf, 0, n) }
+            } }
+        }
+        val fingerprint = digest.digest().joinToString("") { "%02x".format(it) }
+        val id = "local:$fingerprint"
+        val target = File(cache, "$fingerprint.cbz"); tmp.renameTo(target)
+        if (index.register(id, name, fingerprint)) {
+            ComicIndexer(SafeArchive(), ocr).indexCbz(index, id, target, onProgress)
+            save()
+        }
+    }
+
     suspend fun forget(fileId: String) = lock.withLock { index.forget(fileId); save() }
 
     fun summary(): String {

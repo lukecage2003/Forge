@@ -156,6 +156,9 @@ class AppContainer(private val app: Application) {
 
     private fun rebuild() { orchestrator = buildOrchestrator() }
 
+    /** À appeler quand les outils changent (bibliothèque indexée, recherche configurée…). */
+    fun refreshTools() = rebuild()
+
     fun updateSettings(new: ForgeSettings) {
         settings = new
         new.save(app)

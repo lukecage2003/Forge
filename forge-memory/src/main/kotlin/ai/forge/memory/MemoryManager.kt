@@ -93,6 +93,10 @@ class MemoryManager(
 
     suspend fun forget(id: String) = store.delete(id)
 
+    /** Consultation par l'utilisateur (§4) : tous les souvenirs actifs, les plus récents d'abord. */
+    suspend fun list(includeSuperseded: Boolean = false): List<MemoryItem> =
+        store.all().filter { includeSuperseded || it.active }.sortedByDescending { it.updatedAtMs }
+
     /** Purge des souvenirs expirés (hors souvenirs épinglés). Renvoie le nombre supprimé. */
     suspend fun purgeExpired(): Int {
         val t = now()

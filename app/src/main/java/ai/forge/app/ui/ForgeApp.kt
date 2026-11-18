@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -48,7 +49,8 @@ fun ForgeApp(container: AppContainer) {
             containerColor = MaterialTheme.colorScheme.background,
             bottomBar = {
                 NavigationBar(containerColor = ForgePalette.Surface) {
-                    listOf("chat" to (Icons.Default.Forum to "Conversation"), "actions" to (Icons.Default.Bolt to "Actions"),
+                    listOf("chat" to (Icons.Default.Forum to "Parler"), "memory" to (Icons.Default.Psychology to "Mémoire"),
+                        "library" to (Icons.AutoMirrored.Filled.MenuBook to "Comics"), "actions" to (Icons.Default.Bolt to "Actions"),
                         "settings" to (Icons.Default.Tune to "Réglages")).forEach { (id, v) ->
                         NavigationBarItem(selected = screen == id, onClick = { screen = id },
                             icon = { Icon(v.first, v.second) }, label = { Text(v.second) })
@@ -60,6 +62,8 @@ fun ForgeApp(container: AppContainer) {
                 when (screen) {
                     "chat" -> ChatScreen(container, onSettings = { screen = "settings" })
                     "actions" -> ActionCenterScreen(container)
+                    "memory" -> MemoryScreen(container)
+                    "library" -> LibraryScreen(container)
                     else -> SettingsScreen(container, onBack = { screen = "chat" })
                 }
             }
