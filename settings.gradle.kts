@@ -33,6 +33,7 @@ include(
     ":forge-academy",
     ":forge-browser",
     ":forge-documents",
+    ":forge-market",
 )
 
 // Application Android : incluse seulement si un SDK Android est configuré,

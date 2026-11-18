@@ -272,6 +272,18 @@ class Orchestrator(
             ?: Regex("(\\d{1,2})\\s*(min|minutes)\\b").find(input)?.groupValues?.get(1)?.toInt()?.times(60)
             ?: platform.defaultSeconds
         val market = marketTool?.let { runCatching { it.insights(input, platform) }.getOrNull() }
+        // Demande d'analyse du marché (pas d'écriture de script) : rapport chiffré + recommandations.
+        val folded = ai.forge.core.text.TextUtils.fold(input)
+        if (Regex("(analys|marche|tendance|concurren|ce qui marche|niche)").containsMatchIn(folded) && !Regex("(ecri|redige|script)").containsMatchIn(folded)) {
+            val data = market ?: "Aucune donnée de marché disponible (ajoutez une clé YouTube Data API dans Réglages, ou connectez-vous à Internet). Ne présente aucun chiffre comme réel."
+            val r = provider.complete(request(Specialists[SpecialistId.EDITORIAL], ctx, voice, memoryContext,
+                extra = "Tu es stratège YouTube pour Primestone Media. À partir de ces données réelles, donne : ce qui marche, ce qui ne marche pas, " +
+                    "3 idées de vidéos précises avec titre et accroche, et ton verdict franc sur le potentiel du sujet. N'invente aucun chiffre.\n$data",
+                securityRule = securityRule)).getOrElse { emit(OrchestratorEvent.Failed(it.message ?: "Échec")); return null }
+            val text = (if (market != null && !voice) market + "\n\n" else "") + r.trim()
+            emit(OrchestratorEvent.Token(text)); ctx.add(ChatMessage(Role.ASSISTANT, r.trim())); recordUsage(provider.id, ctx, r)
+            return text
+        }
         val studio = ai.forge.editorial.ScriptStudio
         val req = request(Specialists[SpecialistId.EDITORIAL], ctx, voice = false, memoryContext,
             extra = studio.prompt(input, platform, seconds, market, researchNote), securityRule = securityRule).copy(maxTokens = 2_500)

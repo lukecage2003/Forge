@@ -191,6 +191,7 @@ class AppContainer(val app: Application) {
             actionExecutor = actionExecutor,
             researchTool = researchTool(),
             libraryTool = library.tool(),
+            marketTool = marketTool(),
         )
     }
 
@@ -214,6 +215,24 @@ class AppContainer(val app: Application) {
             // Rapide : 4 sources, extraits courts (le contexte d'un modèle embarqué est limité).
             val d = session.run(q, maxSources = 4, excerptChars = 1_200)
             ResearchContext(d.promptContext, d.bibliography(), d.sources.size, d.refused.size, d.sources.count { it.suspicious })
+        }
+    }
+
+    private val marketCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, String>>()
+
+    /** Analyse YouTube (API officielle, clé gratuite de l'utilisateur) ; résultats gardés 1 h. */
+    private fun marketTool(): ai.forge.reasoning.MarketTool? {
+        val key = keys.get("youtube") ?: return null
+        if (!networkAvailable.value || settings.localOnly) return null
+        val yt = ai.forge.market.YouTubeDataClient(key)
+        return ai.forge.reasoning.MarketTool { topic, platform ->
+            val q = topic.replace(Regex("(?i)(écris|rédige|fais|un|une|script|vidéo|video|tiktok|short|youtube|sur|analyse|le|la|les|marché|de|des|du|moi|-moi)\\b"), " ")
+                .replace(Regex("\\s+"), " ").trim().ifBlank { topic }
+            marketCache[q]?.takeIf { System.currentTimeMillis() - it.first < 3_600_000 }?.second ?: run {
+                val vids = yt.topVideos(q, java.time.Instant.now().minus(java.time.Duration.ofDays(180)))
+                val filtered = if (platform.vertical) vids.filter { it.isShort }.ifEmpty { vids } else vids.filter { !it.isShort }.ifEmpty { vids }
+                ai.forge.market.MarketAnalyzer.analyze(q, filtered).summary().also { marketCache[q] = System.currentTimeMillis() to it }
+            }
         }
     }
 

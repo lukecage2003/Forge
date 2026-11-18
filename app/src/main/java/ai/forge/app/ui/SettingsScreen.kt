@@ -41,6 +41,7 @@ fun SettingsScreen(container: AppContainer) {
     var anthropicKey by remember { mutableStateOf("") }
     var oaiKey by remember { mutableStateOf("") }
     var braveKey by remember { mutableStateOf("") }
+    var youtubeKey by remember { mutableStateOf("") }
     var testResult by remember { mutableStateOf<String?>(null) }
     var saved by remember { mutableStateOf(false) }
     val brain by container.brain.collectAsState()
@@ -109,6 +110,13 @@ fun SettingsScreen(container: AppContainer) {
         }
 
         item {
+            Section("Analyse YouTube") {
+                Field(youtubeKey, if (container.keys.get("youtube") != null) "Clé YouTube Data API (enregistrée)" else "Clé YouTube Data API (gratuite)") { youtubeKey = it }
+                Hint("Console Google Cloud → activer « YouTube Data API v3 » → Identifiants → Clé API. Forge analyse les vidéos qui surperforment sur votre sujet pour améliorer vos scripts.")
+            }
+        }
+
+        item {
             Section("Confidentialité du cloud") {
                 Hint("Ce qu'un service en ligne peut recevoir. Vos comics et documents ne partent jamais sans votre accord ici.")
                 listOf(DataClass.GENERAL to "La question seule (recommandé)", DataClass.PERSONAL to "Question + souvenirs personnels",
@@ -168,6 +176,7 @@ fun SettingsScreen(container: AppContainer) {
                 if (anthropicKey.isNotBlank()) container.keys.put("anthropic", anthropicKey)
                 if (oaiKey.isNotBlank()) container.keys.put("oai", oaiKey)
                 if (braveKey.isNotBlank()) container.keys.put("brave", braveKey)
+                if (youtubeKey.isNotBlank()) container.keys.put("youtube", youtubeKey)
                 container.voice.tts.speechRate = s.speechRate
                 container.updateSettings(s)
                 saved = true

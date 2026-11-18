@@ -27,7 +27,7 @@ class IntentAnalyzer {
             "\\b(black panther|superman|batman|spider[- ]?man|thor|hulk|x[- ]men|avengers|wolverine|flash)\\b",
             "\\bnumero\\s*#?\\d+", "#\\d+")),
         Rule(SpecialistId.EDITORIAL, r("\\bscript", "\\bshorts?\\b", "\\btiktok\\b", "\\breels?\\b", "\\byoutube\\b",
-            "\\bdocumentaire\\b", "\\bprimestone\\b", "\\bvideo\\b", "\\bmontage\\b", "\\bhook\\b")),
+            "\\bdocumentaire\\b", "\\bprimestone\\b", "\\bmarche (youtube|des videos)\\b", "\\btendances?\\b", "\\bmes videos\\b", "\\bma chaine\\b", "\\bvideo\\b", "\\bmontage\\b", "\\bhook\\b")),
         Rule(SpecialistId.WRITING, r("\\bcorrig(e|er|es)\\b(?!.*\\bexercice)", "\\breecri", "\\bredige", "\\bemail\\b",
             "\\bmail\\b", "\\bcourrier\\b", "\\borthograph", "\\bgrammaire\\b", "\\breformule")),
         Rule(SpecialistId.STUDY, r("\\bexercice", "\\bcorrige\\b.*\\b(exercice|examen|qcm|td|tp)",
