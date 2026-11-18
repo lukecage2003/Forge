@@ -33,6 +33,8 @@ data class ForgeSettings(
     val bargeInWithoutHeadset: Boolean = false,
     /** Voix naturelles en ligne autorisées (repli automatique sur une voix locale hors-ligne). */
     val networkVoices: Boolean = true,
+    /** Notification de briefing chaque matin. */
+    val morningBriefing: Boolean = false,
 ) {
     companion object {
         private const val FILE = "forge_settings"
@@ -60,6 +62,7 @@ data class ForgeSettings(
                 requireWakeWord = p.getBoolean("wakeWord", false),
                 bargeInWithoutHeadset = p.getBoolean("bargeIn", false),
                 networkVoices = p.getBoolean("networkVoices", true),
+                morningBriefing = p.getBoolean("briefing", false),
             )
         }
     }
@@ -79,7 +82,7 @@ data class ForgeSettings(
             .putInt("cloudDaily", cloudDailyRequestLimit ?: 0)
             .putFloat("cloudBudget", cloudMonthlyBudget?.toFloat() ?: -1f)
             .putString("searxngUrl", searxngUrl)
-            .putBoolean("wakeWord", requireWakeWord).putBoolean("bargeIn", bargeInWithoutHeadset).putBoolean("networkVoices", networkVoices).putBoolean("rateMigrated", true)
+            .putBoolean("wakeWord", requireWakeWord).putBoolean("bargeIn", bargeInWithoutHeadset).putBoolean("networkVoices", networkVoices).putBoolean("rateMigrated", true).putBoolean("briefing", morningBriefing)
             .apply()
     }
 }

@@ -76,3 +76,11 @@ class AcademyTest {
         assertTrue(exam.disclaimer.contains("peuvent différer"))
     }
 }
+
+class BriefingTest {
+    @Test fun briefingSummarisesOnlyRealItems() {
+        val (t, body) = MorningBriefing.compose(MorningBriefing.Inputs(listOf("Vidéo vibranium à monter"), 3, "La faille du costume", 8))!!
+        assertTrue(t.startsWith("Bonjour")); assertTrue(body.contains("3 fiches à réviser")); assertTrue(body.contains("La faille du costume"))
+        assertNull(MorningBriefing.compose(MorningBriefing.Inputs(emptyList(), 0, null, 8)))
+    }
+}

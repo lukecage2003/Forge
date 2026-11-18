@@ -151,6 +151,20 @@ fun SettingsScreen(container: AppContainer) {
         }
 
         item {
+            Section("Briefing du matin") {
+                val notifPerm = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) { Text("Briefing chaque matin (7 h 30)", color = ForgePalette.Text)
+                        Hint("Projets en cours, fiches à réviser, script en préparation. Calculé sur le téléphone.") }
+                    Switch(s.morningBriefing, { on ->
+                        s = s.copy(morningBriefing = on)
+                        if (on && android.os.Build.VERSION.SDK_INT >= 33) notifPerm.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    }, colors = switchColors)
+                }
+            }
+        }
+
+        item {
             Section("Assistant du téléphone") {
                 Hint("Faites de Forge l'assistant numérique : un appui long sur le bouton latéral l'ouvre directement en écoute, même écran verrouillé.")
                 Hint("1. Touchez le bouton ci-dessous → Assistant numérique → Forge.  2. Paramètres → Fonctions avancées → Touche latérale → Appui prolongé → Assistant numérique.")

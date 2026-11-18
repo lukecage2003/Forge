@@ -8,7 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 
 class MainActivity : ComponentActivity() {
-    companion object { const val EXTRA_START_VOICE = "ai.forge.app.START_VOICE" }
+    companion object { const val EXTRA_START_VOICE = "ai.forge.app.START_VOICE"; const val EXTRA_PROMPT = "ai.forge.app.PROMPT" }
 
     /** Lancé comme assistant (bouton latéral) : demande d'écoute immédiate. */
     private fun wantsVoice(i: Intent?) = i?.getBooleanExtra(EXTRA_START_VOICE, false) == true ||
@@ -17,6 +17,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (wantsVoice(intent)) (application as ForgeApplication).container.voiceRequested.value = true
+        intent.getStringExtra(EXTRA_PROMPT)?.let { (application as ForgeApplication).container.prefill.value = it }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -26,6 +27,7 @@ class MainActivity : ComponentActivity() {
         // Prépare le modèle local en arrière-plan : la première réponse arrive sans attendre le chargement.
         container.warmUpLocalModel()
         if (wantsVoice(intent)) container.voiceRequested.value = true
+        intent?.getStringExtra(EXTRA_PROMPT)?.let { container.prefill.value = it }
         setContent { ForgeApp(container) }
     }
 }

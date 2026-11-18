@@ -261,6 +261,7 @@ class AppContainer(val app: Application) {
         new.save(app)
         gate.ceiling = new.autonomyCeiling
         applyVoice()
+        ai.forge.app.academy.BriefingWorker.schedule(app, new.morningBriefing)
         voice.requireWakeWord = new.requireWakeWord
         voice.bargeInEnabled = new.bargeInWithoutHeadset
         orchestrator = buildOrchestrator()
