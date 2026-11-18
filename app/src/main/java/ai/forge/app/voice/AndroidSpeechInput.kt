@@ -1,6 +1,6 @@
 package ai.forge.app.voice
 
-import ai.forge.core.voice.Endpointer
+import ai.forge.voice.Endpointer
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle

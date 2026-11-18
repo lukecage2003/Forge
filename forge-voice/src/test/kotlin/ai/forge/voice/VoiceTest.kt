@@ -1,0 +1,89 @@
+package ai.forge.voice
+
+import ai.forge.voice.*
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
+import kotlin.test.*
+
+class VoiceTest {
+    @Test fun endpointerWaitsLongerAfterHesitation() {
+        val e = Endpointer()
+        assertFalse(e.isEndOfTurn("Forge, tu sais, je repensais au film et euh", 1_000))
+        assertFalse(e.isEndOfTurn("Je pensais que", 1_000))
+        assertTrue(e.isEndOfTurn("Tu en penses quoi ?", 500))
+        assertTrue(e.isEndOfTurn("Je repensais au film Superman de Christopher Reeve", 800))
+    }
+
+    @Test fun bargeInClassification() {
+        val c = BargeInClassifier()
+        assertEquals(BargeIn.StopAndListen, c.classify("Attends, laisse-moi terminer"))
+        assertEquals(BargeIn.StopAndListen, c.classify("Stop."))
+        val topic = c.classify("En fait, changeons de sujet, parle-moi de Batman")
+        assertIs<BargeIn.ChangeTopic>(topic)
+        assertEquals("parle-moi de batman", topic.remainder)
+        assertEquals(BargeIn.Backchannel, c.classify("hmm"))
+        assertEquals(BargeIn.EndSession, c.classify("Merci Forge c'est tout"))
+        assertIs<BargeIn.NewUtterance>(c.classify("Et Lex Luthor dans tout ça ?"))
+    }
+
+    @Test fun chunkerEmitsSentencesAndStripsMarkdown() {
+        val ch = SpeechChunker(minChars = 10)
+        val out = mutableListOf<String>()
+        "Le film de **1978** a posé les bases du genre. Voir https://exemple.org pour plus. Fin".split(" ")
+            .forEach { out += ch.push("$it ") }
+        ch.flush()?.let { out += it }
+        assertEquals("Le film de 1978 a posé les bases du genre.", out[0])
+        assertTrue(out[1].contains("le lien"))
+        assertEquals("Fin", out.last())
+    }
+
+    @Test fun chunkerDoesNotSplitAfterAbbreviation() {
+        val ch = SpeechChunker(minChars = 5)
+        val segs = ch.push("Voir la p. 12 de l'édition originale. Ensuite ") 
+        assertEquals(listOf("Voir la p. 12 de l'édition originale."), segs)
+    }
+
+    private class FakeOutput : SpeechOutput {
+        val spoken = mutableListOf<String>()
+        var stops = 0
+        var gate: CompletableDeferred<Unit>? = null
+        override suspend fun speak(segment: String) { spoken += segment; gate?.await() }
+        override fun stopNow() { stops++ }
+    }
+
+    @Test fun interruptionCancelsSpeechAndKeepsPartial() = runTest {
+        val out = FakeOutput().apply { gate = CompletableDeferred() }
+        var partial: String? = null
+        val source = ResponseSource { flow {
+            emit("Le Superman de Christopher Reeve reste une référence absolue du genre. ")
+            delay(10)
+            emit("Sa double identité était jouée avec une finesse remarquable. ")
+        } }
+        val ctl = VoiceSessionController(this, out, source, onInterruptedPartial = { partial = it })
+        ctl.start()
+        ctl.onFinalUtterance("Forge, tu sais, je repensais au film Superman de Christopher Reeve")
+        advanceUntilIdle()
+        assertEquals(VoiceState.SPEAKING, ctl.state.value)
+        ctl.onUserSpeechStarted()
+        ctl.onFinalUtterance("Attends, laisse-moi terminer")
+        advanceUntilIdle()
+        assertEquals(VoiceState.LISTENING, ctl.state.value)
+        assertTrue(out.stops >= 1)
+        assertEquals(1, out.spoken.size)
+        assertNotNull(partial)
+    }
+
+    @Test fun backchannelDoesNotInterrupt() = runTest {
+        val out = FakeOutput()
+        val ctl = VoiceSessionController(this, out, { flow { emit("Bonne remarque à approfondir. ") } })
+        ctl.start()
+        ctl.onFinalUtterance("Parle-moi de Superman")
+        ctl.onFinalUtterance("hmm")
+        advanceUntilIdle()
+        assertEquals(1, out.spoken.size)
+        assertEquals(VoiceState.LISTENING, ctl.state.value)
+    }
+}

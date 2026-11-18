@@ -1,9 +1,9 @@
 package ai.forge.app.actions
 
 import ai.forge.core.model.AutonomyLevel
-import ai.forge.core.tools.Tool
-import ai.forge.core.tools.ToolResult
-import ai.forge.core.tools.ToolSpec
+import ai.forge.security.Tool
+import ai.forge.security.ToolResult
+import ai.forge.security.ToolSpec
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent

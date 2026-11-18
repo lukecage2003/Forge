@@ -3,8 +3,8 @@ package ai.forge.app.ui
 import ai.forge.app.AppContainer
 import ai.forge.app.voice.VoiceSessionService
 import ai.forge.core.model.AutonomyLevel
-import ai.forge.core.orchestrator.OrchestratorEvent
-import ai.forge.core.voice.VoiceState
+import ai.forge.reasoning.OrchestratorEvent
+import ai.forge.voice.VoiceState
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult

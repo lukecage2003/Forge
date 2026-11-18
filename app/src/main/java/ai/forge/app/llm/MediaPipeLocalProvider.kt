@@ -1,10 +1,10 @@
 package ai.forge.app.llm
 
-import ai.forge.core.llm.ChatRequest
-import ai.forge.core.llm.LlmEvent
-import ai.forge.core.llm.LlmProvider
-import ai.forge.core.llm.Locality
-import ai.forge.core.llm.ProviderCapabilities
+import ai.forge.models.ChatRequest
+import ai.forge.models.LlmEvent
+import ai.forge.models.LlmProvider
+import ai.forge.models.Locality
+import ai.forge.models.ProviderCapabilities
 import ai.forge.core.model.Role
 import android.content.Context
 import com.google.mediapipe.tasks.genai.llminference.LlmInference

@@ -1,7 +1,7 @@
 package ai.forge.app.drive
 
-import ai.forge.core.comics.ComicFileName
-import ai.forge.core.comics.ComicReference
+import ai.forge.comics.ComicFileName
+import ai.forge.comics.ComicReference
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable

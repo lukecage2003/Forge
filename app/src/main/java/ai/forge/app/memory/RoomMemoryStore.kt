@@ -1,10 +1,10 @@
 package ai.forge.app.memory
 
-import ai.forge.core.memory.InMemoryMemoryStore
-import ai.forge.core.memory.MemoryHit
-import ai.forge.core.memory.MemoryItem
-import ai.forge.core.memory.MemoryQuery
-import ai.forge.core.memory.MemoryStore
+import ai.forge.memory.InMemoryMemoryStore
+import ai.forge.memory.MemoryHit
+import ai.forge.memory.MemoryItem
+import ai.forge.memory.MemoryQuery
+import ai.forge.memory.MemoryStore
 import android.content.Context
 import androidx.room.Dao
 import androidx.room.Database

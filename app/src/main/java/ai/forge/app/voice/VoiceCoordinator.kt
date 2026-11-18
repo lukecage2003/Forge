@@ -1,11 +1,11 @@
 package ai.forge.app.voice
 
-import ai.forge.core.orchestrator.ConversationContext
-import ai.forge.core.orchestrator.Orchestrator
-import ai.forge.core.orchestrator.OrchestratorEvent
-import ai.forge.core.voice.ResponseSource
-import ai.forge.core.voice.VoiceSessionController
-import ai.forge.core.voice.VoiceState
+import ai.forge.reasoning.ConversationContext
+import ai.forge.reasoning.Orchestrator
+import ai.forge.reasoning.OrchestratorEvent
+import ai.forge.voice.ResponseSource
+import ai.forge.voice.VoiceSessionController
+import ai.forge.voice.VoiceState
 import android.content.Context
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow

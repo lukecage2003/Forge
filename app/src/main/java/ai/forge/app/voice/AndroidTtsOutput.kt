@@ -1,6 +1,6 @@
 package ai.forge.app.voice
 
-import ai.forge.core.voice.SpeechOutput
+import ai.forge.voice.SpeechOutput
 import android.content.Context
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
