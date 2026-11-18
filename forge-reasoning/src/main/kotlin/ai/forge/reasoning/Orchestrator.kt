@@ -81,7 +81,12 @@ class Orchestrator(
     /** Analyse du marché YouTube (null = non configurée). */
     private val marketTool: MarketTool? = null,
 ) {
-    fun handle(input: String, ctx: ConversationContext, voice: Boolean, forcedDepth: ThinkingDepth? = null): Flow<OrchestratorEvent> = flow {
+    /**
+     * [images] : images jointes à la question ; [imageText] : texte lu sur ces images (OCR), utilisé
+     * si aucun moteur disponible ne « voit » les images — Forge le dit alors, sans rien inventer.
+     */
+    fun handle(input: String, ctx: ConversationContext, voice: Boolean, forcedDepth: ThinkingDepth? = null,
+               images: List<ByteArray> = emptyList(), imageText: String? = null): Flow<OrchestratorEvent> = flow {
         // 1. Mémoire : uniquement ce que l'utilisateur veut explicitement conserver.
         extractor.extract(input, ctx.id, ctx.project).forEach { emit(OrchestratorEvent.MemoryEvent(memory.remember(it))) }
 
@@ -112,8 +117,18 @@ class Orchestrator(
             lessons.takeIf { it.isNotEmpty() }?.joinToString("\n", prefix = "Leçons tirées de tes erreurs passées (applique-les) :\n") { "- $it" })
             .joinToString("\n\n")
 
-        val needs = RoutingNeeds(depth = intent.depth, task = taskOf(intent.primary), dataClass = dataClass)
-        val provider = router.select(needs)
+        val baseNeeds = RoutingNeeds(depth = intent.depth, task = taskOf(intent.primary),
+            dataClass = if (images.isNotEmpty() && dataClass == DataClass.GENERAL) DataClass.PERSONAL else dataClass)
+        // Avec une image : un moteur qui voit, sinon repli sur le texte lu dans l'image.
+        val visionProvider = if (images.isNotEmpty()) router.select(baseNeeds.copy(needsVision = true)) else null
+        val needs = baseNeeds
+        val provider = visionProvider ?: router.select(needs)
+        attachedImages = if (visionProvider != null) images else emptyList()
+        imageFallback = if (images.isNotEmpty() && visionProvider == null)
+            "L'utilisateur a joint une image, mais le modèle actuel ne voit pas les images. Dis-le simplement. " +
+                (imageText?.takeIf { it.isNotBlank() }?.let { "Texte lu automatiquement sur l'image (OCR, peut contenir des erreurs) :\n$it" }
+                    ?: "Aucun texte lisible n'a été trouvé sur l'image : ne décris pas son contenu, tu ne le vois pas.")
+            else null
         budgetTokens = provider?.capabilities?.contextTokens ?: budgetTokens
         if (provider == null) {
             emit(OrchestratorEvent.Failed("Aucun moteur disponible pour cette demande (${dataClass.label}). Détail : ${router.explain(needs)}"))
@@ -262,6 +277,9 @@ class Orchestrator(
         emit(OrchestratorEvent.Completed(finalWithSources))
     }
 
+    @Volatile private var attachedImages: List<ByteArray> = emptyList()
+    @Volatile private var imageFallback: String? = null
+
     /** Fenêtre de contexte du moteur choisi (mise à jour à chaque requête). */
     @Volatile private var budgetTokens: Int = 8_192
 
@@ -271,13 +289,13 @@ class Orchestrator(
         // (souvenirs, sources, consignes de tâche) est joint à la question elle-même.
         val system = ForgePersona.systemPrompt(voice, "Spécialiste actif : ${spec.name}. ${spec.mission}\n${spec.instructions}") +
             (securityRule?.let { "\n\n$it" } ?: "")
-        val dynamic = listOfNotNull(memoryContext.ifBlank { null }?.let { "Éléments de mémoire pertinents (à utiliser avec discernement, sans les réciter) :\n$it" }, extra)
+        val dynamic = listOfNotNull(memoryContext.ifBlank { null }?.let { "Éléments de mémoire pertinents (à utiliser avec discernement, sans les réciter) :\n$it" }, imageFallback, extra)
             .joinToString("\n\n")
         val maxOut = if (voice) 600 else minOf(3_000, budgetTokens / 3)
         val turns = ContextBudget.fit(ctx.turns, budgetTokens - maxOut - ContextBudget.estimate(system) - ContextBudget.estimate(dynamic))
         val withContext = if (dynamic.isBlank() || turns.isEmpty() || turns.last().role != Role.USER) turns
             else turns.dropLast(1) + turns.last().copy(content = "[Contexte pour cette question — ne le cite pas tel quel]\n$dynamic\n\n[Question]\n${turns.last().content}")
-        return ChatRequest(listOf(ChatMessage(Role.SYSTEM, system)) + withContext, temperature = spec.temperature, maxTokens = maxOut)
+        return ChatRequest(listOf(ChatMessage(Role.SYSTEM, system)) + withContext, temperature = spec.temperature, maxTokens = maxOut, images = attachedImages)
     }
 
 

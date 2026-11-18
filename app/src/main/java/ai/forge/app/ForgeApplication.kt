@@ -98,7 +98,9 @@ class AppContainer(val app: Application) {
 
     /** Pont entre l'orchestrateur et l'Action Engine : statuts réels, confirmation explicite. */
     /** Bibliothèque personnelle (comics, documents) indexée sur l'appareil. */
-    val library = LibraryRepository(java.io.File(app.filesDir, "library"), MlKitOcrEngine())
+    /** OCR partagé (bibliothèque, images jointes, cours). */
+    val ocr = MlKitOcrEngine()
+    val library = LibraryRepository(java.io.File(app.filesDir, "library"), ocr)
 
     private val actionExecutor = ToolCallExecutor { call, confirmed ->
         if (confirmed) actions.confirm(call)

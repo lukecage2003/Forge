@@ -23,6 +23,8 @@ data class ChatRequest(
     val temperature: Double = 0.7,
     val maxTokens: Int = 1024,
     val stop: List<String> = emptyList(),
+    /** Images jointes au dernier message de l'utilisateur (JPEG/PNG), pour les moteurs avec vision. */
+    val images: List<ByteArray> = emptyList(),
 )
 
 /** Événement de génération en flux continu. */

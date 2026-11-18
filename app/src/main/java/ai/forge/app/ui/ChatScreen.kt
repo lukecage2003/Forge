@@ -41,6 +41,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -106,7 +107,9 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
             }.getOrElse { "Échec de l'animation : ${it.message}" }
         }
     }
-    val pagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> pageToImport = uri }
+    var pickedImage by remember { mutableStateOf<android.net.Uri?>(null) }
+    var attached by remember { mutableStateOf<android.net.Uri?>(null) }
+    val pagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> pickedImage = uri }
 
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) { VoiceSessionService.start(context); voiceOn = true }
@@ -121,6 +124,7 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
 
     fun send(text: String) {
         if (text.isBlank() || busy) return
+        val image = attached; attached = null
         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         busy = true
         lines += ChatLine("Vous", text.trim())
@@ -133,7 +137,8 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
             listState.animateScrollToItem(lines.lastIndex)
             val buf = StringBuilder()
             var lastPaint = 0L
-            container.orchestrator.handle(text, container.conversation, voice = false).collect { e ->
+            val (imgs, imgText) = if (image != null) prepareImage(context, container, image) else (emptyList<ByteArray>() to null)
+            container.orchestrator.handle(text, container.conversation, voice = false, images = imgs, imageText = imgText).collect { e ->
                 when (e) {
                     is OrchestratorEvent.ResearchDone -> lines[idx] = lines[idx].copy(meta = "${e.sourceCount} source(s) consultée(s)")
                     is OrchestratorEvent.LibraryResults -> lines[idx] = lines[idx].copy(meta = "${e.passages.size} passage(s) trouvé(s) dans vos comics")
@@ -192,6 +197,15 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
             lines[i] = l.copy(rated = true); feedbackFor = null
             lines += ChatLine("Mémoire", if (comment.isNotBlank()) "Leçon retenue : je l'appliquerai désormais." else "Retour noté.")
         }, onCancel = { feedbackFor = null })
+    }
+
+    pickedImage?.let { uri ->
+        androidx.compose.material3.AlertDialog(onDismissRequest = { pickedImage = null }, containerColor = ForgePalette.SurfaceHigh, shape = RoundedCornerShape(28.dp),
+            title = { Text("Que faire de cette image ?", color = ForgePalette.Text) },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                GlassPill("Poser une question dessus", Icons.Default.QuestionAnswer, Modifier.fillMaxWidth()) { attached = uri; pickedImage = null }
+                GlassPill("L'ajouter comme preuve (page de comic)", Icons.Default.Verified, Modifier.fillMaxWidth()) { pageToImport = uri; pickedImage = null }
+            } }, confirmButton = {})
     }
 
     pageToImport?.let { uri ->
@@ -269,6 +283,14 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
         // Transcription en direct (mode vocal).
         if (voiceOn && partial.isNotBlank() && container.settings.showTranscript)
             Text("« $partial »", Modifier.padding(horizontal = 24.dp, vertical = 4.dp), style = MaterialTheme.typography.bodyMedium, color = ForgePalette.GoldSoft)
+
+        attached?.let { uri ->
+            Row(Modifier.padding(horizontal = 20.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                ImageThumb(uri)
+                Text("Image jointe à votre prochaine question", Modifier.padding(horizontal = 10.dp).weight(1f), style = MaterialTheme.typography.bodySmall, color = ForgePalette.GoldSoft)
+                Icon(Icons.Default.Close, "Retirer l'image", tint = ForgePalette.TextMuted, modifier = Modifier.clickableNoRipple { attached = null })
+            }
+        }
 
         // Barre de saisie flottante.
         GlassSurface(Modifier.padding(start = 14.dp, end = 14.dp, bottom = TabBarSpace + 6.dp, top = 4.dp).navigationBarsPadding().fillMaxWidth(),
@@ -404,4 +426,30 @@ private fun friendlyError(reason: String): String = when {
 private fun looksCut(text: String): Boolean {
     val t = text.trimEnd()
     return t.length > 1_200 && !Regex("[.!?…»)\\]*_`]$").containsMatchIn(t) && !t.contains("Contrôle de rétention") && !t.contains("Solidité :")
+}
+
+/** Image réduite (≤ 1024 px, JPEG) pour le modèle + texte lu par OCR en repli. */
+private suspend fun prepareImage(context: android.content.Context, container: AppContainer, uri: android.net.Uri): Pair<List<ByteArray>, String?> =
+    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        runCatching {
+            val raw = context.contentResolver.openInputStream(uri)!!.use { it.readBytes() }
+            val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            android.graphics.BitmapFactory.decodeByteArray(raw, 0, raw.size, bounds)
+            var sample = 1; while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 1_024) sample *= 2
+            val bmp = android.graphics.BitmapFactory.decodeByteArray(raw, 0, raw.size, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
+            val jpeg = java.io.ByteArrayOutputStream().also { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, it); bmp.recycle() }.toByteArray()
+            listOf(jpeg) to runCatching { container.ocr.recognize(raw).text }.getOrNull()
+        }.getOrElse { emptyList<ByteArray>() to null }
+    }
+
+@Composable
+private fun ImageThumb(uri: android.net.Uri) {
+    val context = LocalContext.current
+    val bmp by produceState<android.graphics.Bitmap?>(null, uri) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { context.contentResolver.openInputStream(uri)!!.use { android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = 8 }) } }.getOrNull()
+        }
+    }
+    bmp?.let { androidx.compose.foundation.Image(it.asImageBitmap(), null, Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)),
+        contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
 }

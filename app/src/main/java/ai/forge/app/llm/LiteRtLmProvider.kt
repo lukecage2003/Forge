@@ -39,9 +39,10 @@ class LiteRtLmProvider(
     override val displayName: String = "Gemma (sur le téléphone)",
 ) : LlmProvider {
     @Volatile private var contextTokens = maxTokens
+    @Volatile private var visionEnabled = false
     private val quality0 = quality
     /** Contexte réel après démarrage (8k si le GPU l'accepte, sinon 4k). */
-    override val capabilities get() = ProviderCapabilities(Locality.ON_DEVICE, contextTokens = contextTokens, reasoningQuality = quality0)
+    override val capabilities get() = ProviderCapabilities(Locality.ON_DEVICE, contextTokens = contextTokens, vision = visionEnabled, reasoningQuality = quality0)
 
     /** Backend effectivement utilisé, pour l'affichage (« GPU » ou « CPU (repli) »). */
     val activeBackend = MutableStateFlow<String?>(null)
@@ -56,15 +57,18 @@ class LiteRtLmProvider(
         engine?.let { return it }
         kotlinx.coroutines.withContext(Dispatchers.IO) {
             // Ordre d'essai : GPU grand contexte → GPU contexte standard → CPU. Le premier qui démarre gagne.
-            val attempts = listOf<Pair<() -> Backend, Int>>({ Backend.GPU() } to maxTokens, { Backend.GPU() } to 4_096,
-                { Backend.CPU() } to maxTokens, { Backend.CPU() } to 4_096).distinct()
+            // Essais : vision activée d'abord (Gemma 4 voit les images), puis sans vision ; GPU puis CPU.
+            data class Attempt(val gpu: Boolean, val vision: Boolean, val tokens: Int)
+            val attempts = listOf(Attempt(true, true, maxTokens), Attempt(true, true, 4_096), Attempt(true, false, maxTokens), Attempt(true, false, 4_096),
+                Attempt(false, true, 4_096), Attempt(false, false, 4_096)).distinct()
             var lastError: Throwable? = null
-            for ((backend, tokens) in attempts) {
-                val b = backend()
-                val e = runCatching { Engine(EngineConfig(modelPath, b, maxNumTokens = tokens, cacheDir = cacheDir)).also { it.initialize() } }
-                    .onFailure { lastError = it }.getOrNull() ?: continue
-                contextTokens = tokens
-                activeBackend.value = (if (b is Backend.GPU) "GPU" else "CPU") + " · contexte ${tokens / 1024}k"
+            for (a in attempts) {
+                val b = if (a.gpu) Backend.GPU() else Backend.CPU()
+                val config = if (a.vision) EngineConfig(modelPath, b, visionBackend = if (a.gpu) Backend.GPU() else Backend.CPU(), maxNumTokens = a.tokens, maxNumImages = 1, cacheDir = cacheDir)
+                    else EngineConfig(modelPath, b, maxNumTokens = a.tokens, cacheDir = cacheDir)
+                val e = runCatching { Engine(config).also { it.initialize() } }.onFailure { lastError = it }.getOrNull() ?: continue
+                contextTokens = a.tokens; visionEnabled = a.vision
+                activeBackend.value = (if (a.gpu) "GPU" else "CPU") + " · contexte ${a.tokens / 1024}k" + if (a.vision) " · vision" else ""
                 engine = e
                 return@withContext e
             }
@@ -102,7 +106,9 @@ class LiteRtLmProvider(
         }
         var emitted = ""
         try {
-            conversation.sendMessageAsync(last.content).collect { msg ->
+            val input = if (request.images.isNotEmpty() && visionEnabled)
+                Contents.of(request.images.map { Content.ImageBytes(it) } + Content.Text(last.content)) else Contents.of(last.content)
+            conversation.sendMessageAsync(input).collect { msg ->
                 val text = msg.contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text }
                 // Le moteur peut renvoyer des fragments ou le texte cumulé : on n'émet que le nouveau.
                 val delta = if (text.startsWith(emitted) && emitted.isNotEmpty()) text.removePrefix(emitted) else text

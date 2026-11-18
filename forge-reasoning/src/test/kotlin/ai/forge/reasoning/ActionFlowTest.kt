@@ -252,3 +252,26 @@ class ContextBudgetTest {
         assertTrue(p.requests.first().messages.joinToString("\n") { it.content }.contains("document PDF"))
     }
 }
+
+class VisionTest {
+    private fun mem() = MemoryManager(InMemoryMemoryStore(), HashingEmbedder())
+    private val img = byteArrayOf(1, 2, 3)
+
+    @Test fun imageGoesToVisionCapableEngine() = runTest {
+        val blind = ScriptedProvider(id = "blind", capabilities = ProviderCapabilities(Locality.ON_DEVICE, 8_000, reasoningQuality = 5)) { "aveugle" }
+        val seer = ScriptedProvider(id = "seer", capabilities = ProviderCapabilities(Locality.ON_DEVICE, 8_000, vision = true, reasoningQuality = 3)) { "Je vois T'Challa." }
+        val o = Orchestrator(ProviderRouter(listOf(blind, seer)), mem())
+        o.handle("Que se passe-t-il sur cette case ?", ConversationContext("v"), voice = false, images = listOf(img)).toList()
+        assertEquals(1, seer.requests.single().images.size); assertTrue(blind.requests.isEmpty())
+    }
+
+    @Test fun withoutVisionForgeUsesOcrAndSaysSoNeverInvents() = runTest {
+        val blind = ScriptedProvider(capabilities = ProviderCapabilities(Locality.ON_DEVICE, 8_000, reasoningQuality = 5)) { "ok" }
+        val o = Orchestrator(ProviderRouter(listOf(blind)), mem())
+        o.handle("Que dit cette page ?", ConversationContext("v2"), voice = false, images = listOf(img), imageText = "WAKANDA FOREVER").toList()
+        val sent = blind.requests.single()
+        assertTrue(sent.images.isEmpty())
+        val all = sent.messages.joinToString("\n") { it.content }
+        assertTrue(all.contains("ne voit pas les images")); assertTrue(all.contains("WAKANDA FOREVER"))
+    }
+}
