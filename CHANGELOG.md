@@ -1,5 +1,11 @@
 # Historique des versions
 
+## 0.3.1 — 18/11/2026
+- Premier lancement : carte « Forge a besoin de son cerveau » avec installation en un bouton du modèle
+  recommandé (Qwen 2.5 1,5B, Apache 2.0, 1,6 Go, sans compte) : reprise après coupure, vérification
+  SHA-256, alerte hors Wi-Fi.
+- Gabarits de conversation par famille de modèles (ChatML pour Qwen, Gemma pour Gemma).
+
 ## 0.3.0 — 18/11/2026
 - **Application Android compilée** (SDK 35), APK construit, Lint sans erreur ; 7 tests Robolectric.
 - Actions de bout en bout (scénario G) : planification, portail, Intent réel, résultat rapporté par le code.

@@ -3,7 +3,8 @@
 ## Installer Forge sur le Galaxy S25
 1. Copier `app-debug.apk` sur le téléphone (ou `adb install app-debug.apk`).
 2. Autoriser l'installation depuis la source utilisée (Paramètres → Sécurité → Installer des applis inconnues).
-3. Ouvrir Forge, puis **Réglages** pour choisir au moins un moteur d'intelligence (ci-dessous).
+3. Ouvrir Forge et toucher **« Installer le cerveau de Forge »** (1,6 Go, Wi-Fi conseillé). C'est tout :
+   Forge fonctionne ensuite sur le téléphone, même hors connexion. Les autres moteurs ci-dessous sont facultatifs.
 
 ## Moteurs d'intelligence (au choix, cumulables)
 - **Local sur le téléphone (hors-ligne)** : télécharger un modèle MediaPipe au format `.task`

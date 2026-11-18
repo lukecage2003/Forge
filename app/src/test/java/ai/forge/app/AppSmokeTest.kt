@@ -51,3 +51,14 @@ class AppSmokeTest {
         assertTrue(last is OrchestratorEvent.Failed && last.reason.contains("Aucun moteur"))
     }
 }
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
+class BrainStateTest {
+    @Test fun freshInstallShowsMissingBrainAndConfiguringAProviderMakesItReady() {
+        val c = ApplicationProvider.getApplicationContext<ForgeApplication>().container
+        assertEquals(AppContainer.BrainState.Missing, c.brain.value)
+        c.updateSettings(c.settings.copy(lanServerUrl = "http://192.168.1.10:11434/v1", lanModel = "qwen3:8b"))
+        assertEquals(AppContainer.BrainState.Ready, c.brain.value)
+    }
+}

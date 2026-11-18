@@ -130,6 +130,7 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
     ) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {
             VoiceIndicator(container, voiceOn, partial, voiceError, container.settings.showTranscript)
+            BrainCard(container, onOpenSettings = onSettings)
             LazyColumn(Modifier.weight(1f).padding(horizontal = 12.dp), state = listState) {
                 items(lines.size) { i ->
                     val l = lines[i]

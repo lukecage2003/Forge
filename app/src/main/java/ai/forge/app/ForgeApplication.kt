@@ -37,6 +37,9 @@ import ai.forge.actions.ActionStatus
 import ai.forge.actions.ActionEngine
 import ai.forge.models.UsageLimits
 import ai.forge.models.UsageMeter
+import ai.forge.models.DownloadableModel
+import ai.forge.models.ModelDownloader
+import kotlinx.coroutines.launch
 import ai.forge.security.EgressPolicy
 import ai.forge.security.ExternalProviderGrant
 import android.net.ConnectivityManager
@@ -185,6 +188,35 @@ class AppContainer(private val app: Application) {
         new.save(app)
         gate.ceiling = new.autonomyCeiling
         orchestrator = buildOrchestrator()
+        if (brain.value !is BrainState.Downloading) brain.value = if (providers().isEmpty()) BrainState.Missing else BrainState.Ready
+    }
+
+    /** État du « cerveau » (modèle de langage), affiché clairement à l'utilisateur. */
+    sealed interface BrainState {
+        data object Missing : BrainState
+        data class Downloading(val downloaded: Long, val total: Long) : BrainState
+        data class Error(val message: String) : BrainState
+        data object Ready : BrainState
+    }
+    val brain = MutableStateFlow<BrainState>(if (providers().isEmpty()) BrainState.Missing else BrainState.Ready)
+
+    /** Réseau facturé au volume (données mobiles) : on prévient avant 1,6 Go. */
+    fun onMeteredNetwork(): Boolean = app.getSystemService(ConnectivityManager::class.java).isActiveNetworkMetered
+
+    /** Télécharge le modèle recommandé (libre, sans compte), le vérifie puis l'active. */
+    fun installRecommendedBrain() {
+        if (brain.value is BrainState.Downloading) return
+        val model = DownloadableModel.RECOMMENDED
+        brain.value = BrainState.Downloading(0, model.sizeBytes)
+        scope.launch {
+            val r = ModelDownloader().download(model, java.io.File(app.filesDir, "models")) { done, total ->
+                brain.value = BrainState.Downloading(done, total)
+            }
+            when (r) {
+                is ModelDownloader.Result.Ready -> { updateSettings(settings.copy(localModelPath = r.file.absolutePath)); brain.value = BrainState.Ready }
+                is ModelDownloader.Result.Failed -> brain.value = BrainState.Error(r.reason)
+            }
+        }
     }
 
     fun newConversation() { conversation = ConversationContext(UUID.randomUUID().toString()) }

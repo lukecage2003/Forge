@@ -5,7 +5,7 @@ import ai.forge.models.LlmEvent
 import ai.forge.models.LlmProvider
 import ai.forge.models.Locality
 import ai.forge.models.ProviderCapabilities
-import ai.forge.core.model.Role
+import ai.forge.models.PromptTemplate
 import android.content.Context
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import kotlinx.coroutines.Dispatchers
@@ -29,6 +29,9 @@ class MediaPipeLocalProvider(
     override val id: String = "local-mediapipe",
     override val displayName: String = "Modèle local (sur l'appareil)",
 ) : LlmProvider {
+    /** Gabarit déduit du nom du fichier (Qwen → ChatML, Gemma → Gemma). */
+    private val template = PromptTemplate.forModelFile(File(modelPath).name)
+
     override val capabilities = ProviderCapabilities(Locality.ON_DEVICE, contextTokens = maxTokens, reasoningQuality = 2)
 
     private var engine: LlmInference? = null
@@ -44,7 +47,7 @@ class MediaPipeLocalProvider(
     ).also { engine = it }
 
     override fun stream(request: ChatRequest): Flow<LlmEvent> = callbackFlow {
-        val prompt = gemmaPrompt(request)
+        val prompt = template.render(request.messages)
         try {
             engine().generateResponseAsync(prompt) { partial, done ->
                 if (!partial.isNullOrEmpty()) trySend(LlmEvent.Token(partial))
@@ -57,16 +60,4 @@ class MediaPipeLocalProvider(
     }.flowOn(Dispatchers.Default)
 
     fun release() { engine?.close(); engine = null }
-
-    private fun gemmaPrompt(r: ChatRequest): String = buildString {
-        val system = r.messages.filter { it.role == Role.SYSTEM }.joinToString("\n\n") { it.content }
-        var first = true
-        r.messages.filter { it.role != Role.SYSTEM }.forEach { m ->
-            val role = if (m.role == Role.ASSISTANT) "model" else "user"
-            append("<start_of_turn>").append(role).append('\n')
-            if (first && role == "user" && system.isNotBlank()) { append(system).append("\n\n"); first = false }
-            append(m.content).append("<end_of_turn>\n")
-        }
-        append("<start_of_turn>model\n")
-    }
 }
