@@ -2,6 +2,7 @@
 <resources>
     <string name="app_name">Forge</string>
     <string name="voice_channel">Session vocale</string>
+    <string name="widget_description">Un toucher pour parler à Forge.</string>
     <string name="voice_notification">Forge écoute — touchez pour revenir, ou arrêtez la session.</string>
     <string name="stop">Arrêter</string>
 </resources>

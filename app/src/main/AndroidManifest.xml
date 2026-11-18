@@ -90,5 +90,25 @@
             tools:node="merge">
             <meta-data android:name="androidx.work.WorkManagerInitializer" android:value="androidx.startup" tools:node="remove" />
         </provider>
+        <!-- Tuile des réglages rapides : un toucher, Forge écoute. -->
+        <service
+            android:name=".shortcut.ForgeTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_forge_foreground"
+            android:label="Forge"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data android:name="android.service.quicksettings.ACTIVE_TILE" android:value="false" />
+        </service>
+
+        <!-- Widget d'écran d'accueil « Parler à Forge ». -->
+        <receiver android:name=".shortcut.ForgeWidget" android:exported="false" android:label="Forge">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_forge_info" />
+        </receiver>
     </application>
 </manifest>
