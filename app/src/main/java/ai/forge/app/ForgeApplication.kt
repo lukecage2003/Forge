@@ -209,6 +209,20 @@ class AppContainer(val app: Application) {
         ExternalProviderGrant(it, settings.cloudTasks, settings.cloudMaxDataClass)
     })
 
+    /** Mesures réelles des derniers tours (diagnostic de vitesse). */
+    val turnMetrics = MutableStateFlow<List<ai.forge.reasoning.TurnMetrics>>(emptyList())
+
+    /** Test de vitesse du cerveau local : premier mot et vitesse d'écriture, mesurés sur ce téléphone. */
+    suspend fun probeLocalModel(): String {
+        val p = localModel() ?: return "Aucun cerveau installé sur le téléphone."
+        if (p is LiteRtLmProvider) p.warmUp()
+        val r = ai.forge.evaluation.LatencyProbe.measure(p, "Explique en trois phrases pourquoi le ciel est bleu.")
+        r.failed?.let { return "Échec du test : $it" }
+        val writing = (r.totalMs - (r.firstTokenMs ?: 0)).coerceAtLeast(1)
+        val wps = r.chars / 6.0 * 1000 / writing
+        return "Premier mot : ${r.firstTokenMs ?: "?"} ms · écriture : ${"%.1f".format(wps)} mots/s · ${brainDetail.value ?: ""}"
+    }
+
     private fun buildOrchestrator(): Orchestrator {
         listOf("oai", "anthropic").forEach { usage.setLimits(it, UsageLimits(settings.cloudDailyRequestLimit, settings.cloudMonthlyBudget)) }
         return Orchestrator(
@@ -219,7 +233,7 @@ class AppContainer(val app: Application) {
             researchTool = researchTool(),
             libraryTool = library.tool(),
             marketTool = marketTool(),
-        )
+        ).also { o -> o.onTurnMetrics = { m -> turnMetrics.value = (listOf(m) + turnMetrics.value).take(30) } }
     }
 
     /** Fournisseur de recherche configuré, ou null (hors-ligne, non configuré, ou tiers en mode local strict). */

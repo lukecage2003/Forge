@@ -79,6 +79,8 @@ fun SettingsScreen(container: AppContainer) {
             }
         }
 
+        item { SpeedSection(container) }
+
         item {
             Section("Autres moteurs (facultatif)") {
                 Field(s.lanServerUrl.orEmpty(), "PC à la maison (Ollama) — ex. http://192.168.1.10:11434/v1") { s = s.copy(lanServerUrl = it.ifBlank { null }) }
@@ -299,5 +301,38 @@ private fun VoicePicker(container: AppContainer, selected: String?, network: Boo
                 TextButton(onClick = { scope.launch { container.voice.tts.preview(v.name); container.applyVoice() } }) { Text("Écouter", color = ForgePalette.GoldSoft) }
             }
         }
+    }
+}
+
+/** Diagnostic de vitesse : chiffres mesurés sur ce téléphone, pas des estimations. */
+@Composable
+private fun SpeedSection(container: AppContainer) {
+    val metrics by container.turnMetrics.collectAsState()
+    var probe by remember { mutableStateOf<String?>(null) }
+    var running by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    Section("Vitesse (mesurée sur ce téléphone)") {
+        fun median(xs: List<Long>) = xs.sorted().let { if (it.isEmpty()) null else it[it.size / 2] }
+        val ok = metrics.filter { !it.failed }
+        if (ok.isEmpty()) Hint("Posez quelques questions : Forge chronomètre chaque réponse (premier mot, recherche, vitesse d'écriture).")
+        else {
+            val first = median(ok.mapNotNull { it.firstTokenMs })
+            val research = median(ok.mapNotNull { it.researchMs })
+            val wps = ok.mapNotNull { it.wordsPerSecond }.sorted().let { if (it.isEmpty()) null else it[it.size / 2] }
+            Text("Premier mot : ${first?.let { "%.1f s".format(it / 1000.0) } ?: "—"}" +
+                (research?.let { " · recherche : %.1f s".format(it / 1000.0) } ?: "") +
+                (wps?.let { " · %.0f mots/s".format(it) } ?: ""), color = ForgePalette.Text)
+            Hint("Médiane des ${ok.size} dernières réponses.")
+            ok.take(5).forEach { m ->
+                Hint("${if (m.voice) "🎙" else "⌨"} ${m.specialist ?: "?"} — premier mot ${m.firstTokenMs?.let { "%.1f s".format(it / 1000.0) } ?: "—"}" +
+                    (m.researchMs?.let { ", recherche %.1f s".format(it / 1000.0) } ?: "") + ", total %.1f s".format(m.totalMs / 1000.0))
+            }
+            if (wps != null && wps < 7 && container.settings.localModelPath?.let { DownloadableModel.byFileName(java.io.File(it).name) } == DownloadableModel.GEMMA4_E4B)
+                Hint("Conseil : Gemma 4 · E2B écrit environ deux fois plus vite (un peu moins fin). Installez-le dans « Cerveau » si la vitesse compte plus.")
+        }
+        GlassPill(if (running) "Test en cours…" else "Tester la vitesse du cerveau") {
+            if (!running) { running = true; scope.launch { probe = runCatching { container.probeLocalModel() }.getOrElse { "Échec : ${it.message}" }; running = false } }
+        }
+        probe?.let { Hint(it) }
     }
 }

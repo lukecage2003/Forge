@@ -86,8 +86,23 @@ class Orchestrator(
      * [images] : images jointes à la question ; [imageText] : texte lu sur ces images (OCR), utilisé
      * si aucun moteur disponible ne « voit » les images — Forge le dit alors, sans rien inventer.
      */
+    /** Reçoit les mesures de chaque tour terminé (écran de diagnostic). */
+    @Volatile var onTurnMetrics: ((TurnMetrics) -> Unit)? = null
+
     fun handle(input: String, ctx: ConversationContext, voice: Boolean, forcedDepth: ThinkingDepth? = null,
-               images: List<ByteArray> = emptyList(), imageText: String? = null): Flow<OrchestratorEvent> = flow {
+               images: List<ByteArray> = emptyList(), imageText: String? = null): Flow<OrchestratorEvent> {
+        val inner = handleTurn(input, ctx, voice, forcedDepth, images, imageText)
+        val sink = onTurnMetrics ?: return inner
+        return flow {
+            val timer = TurnTimer(voice)
+            var completed = false
+            try { inner.collect { timer.on(it); emit(it) }; completed = true }
+            finally { if (completed) runCatching { sink(timer.finish()) } }
+        }
+    }
+
+    private fun handleTurn(input: String, ctx: ConversationContext, voice: Boolean, forcedDepth: ThinkingDepth?,
+               images: List<ByteArray>, imageText: String?): Flow<OrchestratorEvent> = flow {
         // 1. Mémoire : uniquement ce que l'utilisateur veut explicitement conserver.
         extractor.extract(input, ctx.id, ctx.project).forEach { emit(OrchestratorEvent.MemoryEvent(memory.remember(it))) }
 

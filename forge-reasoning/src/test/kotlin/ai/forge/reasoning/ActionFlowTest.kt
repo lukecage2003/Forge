@@ -308,3 +308,26 @@ class LatencyTest {
         assertTrue(startA == startB || startB - startA == 6)
     }
 }
+
+class TurnMetricsTest {
+    @Test fun timerMeasuresFirstTokenResearchAndSpeed() {
+        var now = 0L
+        val t = TurnTimer(voice = true) { now }
+        now = 100; t.on(OrchestratorEvent.ResearchStarted("q"))
+        now = 900; t.on(OrchestratorEvent.ResearchDone(2, "", 0))
+        now = 1_500; t.on(OrchestratorEvent.Token("Bonjour"))
+        now = 3_500; t.on(OrchestratorEvent.Token(" ".repeat(1) + "x".repeat(593)))
+        val m = t.finish()
+        assertEquals(800L, m.researchMs); assertEquals(1_500L, m.firstTokenMs); assertEquals(3_500L, m.totalMs)
+        assertEquals(50.0, m.wordsPerSecond!!, 0.2)                  // 600 caractères ≈ 100 mots en 2 s
+    }
+
+    @Test fun orchestratorReportsMetricsForEachTurn() = runTest {
+        val p = ScriptedProvider(capabilities = ProviderCapabilities(Locality.ON_DEVICE, 8_192, reasoningQuality = 4)) { "Réponse." }
+        val o = Orchestrator(ProviderRouter(listOf(p)), MemoryManager(InMemoryMemoryStore(), HashingEmbedder()))
+        val got = mutableListOf<TurnMetrics>()
+        o.onTurnMetrics = { got += it }
+        o.handle("Salut", ConversationContext("m"), voice = false).toList()
+        assertEquals(1, got.size); assertEquals(false, got.single().failed); assertTrue(got.single().chars > 0)
+    }
+}
