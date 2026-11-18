@@ -198,6 +198,23 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
     var oaiKey by remember { mutableStateOf("") }
     var testResult by remember { mutableStateOf<String?>(null) }
     var braveKey by remember { mutableStateOf("") }
+    var modelStatus by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    // Modèle local : l'utilisateur choisit le fichier .task (ex. Gemma) ; copié dans l'espace privé de l'app.
+    val modelPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) container.scope.launch {
+            modelStatus = "Copie du modèle en cours…"
+            modelStatus = runCatching {
+                val dir = java.io.File(context.filesDir, "models").apply { mkdirs() }
+                val target = java.io.File(dir, "local-model.task")
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri)!!.use { i -> target.outputStream().use { o -> i.copyTo(o, 1 shl 20) } }
+                }
+                s = s.copy(localModelPath = target.absolutePath)
+                "Modèle prêt (${target.length() / 1_000_000} Mo). Enregistrez les réglages."
+            }.getOrElse { "Échec de la copie : ${it.message}" }
+        }
+    }
     val scope = rememberCoroutineScope()
     Scaffold(topBar = {
         TopAppBar(title = { Text("Réglages") }, navigationIcon = {
@@ -206,8 +223,16 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
     }) { pad ->
         LazyColumn(Modifier.padding(pad).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item { Text("Moteurs d'intelligence", style = MaterialTheme.typography.titleMedium) }
-            item { OutlinedTextField(s.localModelPath.orEmpty(), { s = s.copy(localModelPath = it.ifBlank { null }) },
-                label = { Text("Modèle local (.task) — chemin sur l'appareil") }, modifier = Modifier.fillMaxWidth()) }
+            item {
+                Column {
+                    Text(s.localModelPath?.let { "Modèle local : ${java.io.File(it).name}" } ?: "Aucun modèle local", color = ForgePalette.TextMuted)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { modelPicker.launch(arrayOf("*/*")) }) { Text("Choisir un modèle local (.task)") }
+                        if (s.localModelPath != null) OutlinedButton(onClick = { s = s.copy(localModelPath = null) }) { Text("Retirer") }
+                    }
+                    modelStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = ForgePalette.Gold) }
+                }
+            }
             item { OutlinedTextField(s.lanServerUrl.orEmpty(), { s = s.copy(lanServerUrl = it.ifBlank { null }) },
                 label = { Text("Serveur réseau local (Ollama / llama.cpp), ex. http://192.168.1.10:11434/v1") }, modifier = Modifier.fillMaxWidth()) }
             item { OutlinedTextField(s.lanModel.orEmpty(), { s = s.copy(lanModel = it.ifBlank { null }) },

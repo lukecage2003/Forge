@@ -59,6 +59,12 @@ class ForgeApplication : Application() {
         super.onCreate()
         container = AppContainer(this)
     }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        // Application en arrière-plan ou système sous pression : le modèle local (plusieurs Go) est libéré.
+        if (level >= TRIM_MEMORY_BACKGROUND) container.onLowMemory()
+    }
 }
 
 /** Assemblage des dépendances (injection manuelle : simple, explicite, sans magie). */
@@ -99,6 +105,10 @@ class AppContainer(private val app: Application) {
         ActionOutcome(status, e.outcome)
     }
 
+    // Un seul moteur local résident : réutilisé entre reconstructions, fermé quand le modèle change.
+    private var localProvider: MediaPipeLocalProvider? = null
+    private var localProviderPath: String? = null
+
     var conversation = ConversationContext(UUID.randomUUID().toString())
         private set
 
@@ -107,8 +117,19 @@ class AppContainer(private val app: Application) {
 
     val voice = VoiceCoordinator(app, scope, { orchestrator }, { conversation })
 
+
+    @Synchronized
+    private fun localModel(): MediaPipeLocalProvider? {
+        val path = settings.localModelPath
+        if (path != localProviderPath) { localProvider?.release(); localProvider = path?.let { MediaPipeLocalProvider(app, it) }; localProviderPath = path }
+        return localProvider
+    }
+
+    /** Pression mémoire signalée par Android : on libère le modèle local (rechargé à la demande). */
+    fun onLowMemory() { localProvider?.release() }
+
     fun providers(): List<LlmProvider> = buildList {
-        settings.localModelPath?.let { add(MediaPipeLocalProvider(app, it)) }
+        localModel()?.let { add(it) }
         if (!settings.lanServerUrl.isNullOrBlank() && !settings.lanModel.isNullOrBlank()) {
             add(OpenAiCompatibleProvider("lan", "Serveur local (${settings.lanModel})", settings.lanServerUrl!!, settings.lanModel!!,
                 capabilities = ProviderCapabilities(Locality.LOCAL_NETWORK, 32_000, reasoningQuality = 3)))
