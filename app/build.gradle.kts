@@ -15,8 +15,8 @@ android {
         // Galaxy S25 : Android 15 (One UI 7) et ultérieur. minSdk 31 conserve une marge raisonnable.
         minSdk = 31
         targetSdk = 35
-        versionCode = 8
-        versionName = "0.7.0"
+        versionCode = 9
+        versionName = "0.8.0"
         // Galaxy S25 = arm64-v8a. Ajouter « x86_64 » pour un émulateur de développement.
         ndk { abiFilters += listOf("arm64-v8a") }
     }
@@ -79,6 +79,9 @@ dependencies {
     implementation(libs.mlkit.text)
     // Tâches de fond : indexation de la bibliothèque, briefing du matin.
     implementation(libs.work.runtime)
+    // Mot d'appel « Forge » hors-ligne (Vosk, Apache 2.0) et détection de l'app au premier plan.
+    implementation(libs.vosk.android)
+    implementation(libs.lifecycle.process)
 
     testImplementation(kotlin("test"))
     testImplementation(libs.kotlinx.coroutines.test)

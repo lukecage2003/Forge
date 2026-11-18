@@ -116,7 +116,11 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
     }
     fun toggleVoice() {
         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-        if (voiceOn) { VoiceSessionService.stop(context); voiceOn = false }
+        if (voiceOn) {
+            // Avec la veille activée, couper le micro ramène Forge en veille « Forge » au lieu de tout arrêter.
+            if (container.settings.wakeStandby && container.wakeModelDir() != null) VoiceSessionService.standby(context) else VoiceSessionService.stop(context)
+            voiceOn = false
+        }
         else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             VoiceSessionService.start(context); voiceOn = true
         } else micPermission.launch(Manifest.permission.RECORD_AUDIO)

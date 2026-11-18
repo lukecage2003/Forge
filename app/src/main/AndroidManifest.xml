@@ -11,6 +11,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Bulle Forge par-dessus les applications (accordée par l'utilisateur dans les réglages). -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Veille « Forge » : demander à ne pas être endormi par l'optimisation de batterie. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Action « réveil » (niveau 2, réversible). -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
 

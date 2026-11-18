@@ -26,6 +26,10 @@ class MainActivity : ComponentActivity() {
         val container = (application as ForgeApplication).container
         // Prépare le modèle local en arrière-plan : la première réponse arrive sans attendre le chargement.
         container.warmUpLocalModel()
+        // Veille « Forge » : relancée à l'ouverture (Android n'autorise son démarrage qu'app visible).
+        if (container.settings.wakeStandby && container.wakeModelDir() != null &&
+            checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED)
+            ai.forge.app.voice.VoiceSessionService.standby(this)
         if (wantsVoice(intent)) container.voiceRequested.value = true
         intent?.getStringExtra(EXTRA_PROMPT)?.let { container.prefill.value = it }
         setContent { ForgeApp(container) }

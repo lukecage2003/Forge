@@ -152,6 +152,51 @@ fun SettingsScreen(container: AppContainer) {
         }
 
         item {
+            Section("Bulle et veille « Forge »") {
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                val wakeState by container.wakeInstall.collectAsState()
+                var overlayOk by remember { mutableStateOf(android.provider.Settings.canDrawOverlays(ctx)) }
+                var wakeReady by remember { mutableStateOf(container.wakeModelDir() != null) }
+                val mic = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ok ->
+                    if (ok) { s = s.copy(wakeStandby = true); container.updateSettings(container.settings.copy(wakeStandby = true)); ai.forge.app.voice.VoiceSessionService.standby(ctx) }
+                }
+                LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(1_500); overlayOk = android.provider.Settings.canDrawOverlays(ctx) } }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) { Text("Bulle animée", color = ForgePalette.Text)
+                        Hint("En haut de l'écran, par-dessus vos applications : votre voix en onde dorée, puis la réponse de Forge.") }
+                    Switch(s.islandEnabled, { s = s.copy(islandEnabled = it) }, colors = switchColors)
+                }
+                if (s.islandEnabled && !overlayOk) GlassPill("Autoriser l'affichage par-dessus les applications") {
+                    ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:" + ctx.packageName))
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+
+                Text("Dites « Forge »", style = MaterialTheme.typography.titleMedium, color = ForgePalette.Text)
+                Hint("Détecteur hors-ligne (Vosk, 42 Mo) : il n'écoute que le mot « Forge », rien ne quitte le téléphone. Fonctionne écran allumé, dans n'importe quelle application ; une notification indique que le micro est actif.")
+                if (!wakeReady) GlassPill("Installer le mot d'appel") { container.installWakeWord { wakeReady = true } }
+                else Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Veille : répondre quand je dis « Forge »", Modifier.weight(1f), color = ForgePalette.Text)
+                    Switch(s.wakeStandby, { on ->
+                        if (on) mic.launch(android.Manifest.permission.RECORD_AUDIO)
+                        else { s = s.copy(wakeStandby = false); container.updateSettings(container.settings.copy(wakeStandby = false)); ai.forge.app.voice.VoiceSessionService.stop(ctx) }
+                    }, colors = switchColors)
+                }
+                wakeState?.let { Hint(it) }
+                if (wakeReady) {
+                    Text("Sensibilité : ${if (s.wakeStrictness < 0.5) "élevée" else if (s.wakeStrictness < 0.65) "normale" else "stricte"}", color = ForgePalette.Text)
+                    Slider((0.8 - s.wakeStrictness).toFloat() / 0.4f, { v -> s = s.copy(wakeStrictness = 0.8 - v * 0.4) },
+                        colors = SliderDefaults.colors(thumbColor = ForgePalette.Gold, activeTrackColor = ForgePalette.Gold))
+                    Hint("Trop de faux réveils : réduisez. Forge ne vous entend pas : augmentez.")
+                    GlassPill("Empêcher Samsung d'endormir Forge") {
+                        runCatching { ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, android.net.Uri.parse("package:" + ctx.packageName))
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                    }
+                }
+            }
+        }
+
+        item {
             Section("Briefing du matin") {
                 val notifPerm = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -218,7 +263,7 @@ fun SettingsScreen(container: AppContainer) {
                 // Les installations faites pendant que l'écran est ouvert (cerveau, voix) ne doivent pas être écrasées.
                 val latest = container.settings
                 container.updateSettings(s.copy(localModelPath = latest.localModelPath,
-                    neuralVoicePath = if (removeNeural) null else latest.neuralVoicePath))
+                    neuralVoicePath = if (removeNeural) null else latest.neuralVoicePath, wakeStandby = latest.wakeStandby))
                 saved = true
             }
         }

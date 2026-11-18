@@ -58,3 +58,16 @@ class DownloadTest {
         assertTrue(PromptTemplate.GEMMA.render(msgs).startsWith("<start_of_turn>user\nTu es Forge.\n\nSalut"))
     }
 }
+
+class UnzipTest {
+    @Test fun extractsAndRefusesZipSlip() {
+        val dir = kotlin.io.path.createTempDirectory("unz").toFile()
+        fun zip(name: String, entries: Map<String, String>) = java.io.File(dir, name).also { f ->
+            java.util.zip.ZipOutputStream(f.outputStream()).use { z -> entries.forEach { (n, c) -> z.putNextEntry(java.util.zip.ZipEntry(n)); z.write(c.toByteArray()); z.closeEntry() } }
+        }
+        val out = ModelDownloader.unzipSafely(zip("ok.zip", mapOf("m/conf/model.conf" to "x", "m/am/final.mdl" to "y")), java.io.File(dir, "out"))
+        kotlin.test.assertEquals("y", java.io.File(out, "m/am/final.mdl").readText())
+        kotlin.test.assertFailsWith<IllegalArgumentException> { ModelDownloader.unzipSafely(zip("bad.zip", mapOf("../evil.txt" to "z")), java.io.File(dir, "out2")) }
+        kotlin.test.assertFalse(java.io.File(dir, "evil.txt").exists())
+    }
+}

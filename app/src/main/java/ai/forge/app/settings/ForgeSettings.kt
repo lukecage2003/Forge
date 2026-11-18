@@ -37,6 +37,12 @@ data class ForgeSettings(
     val morningBriefing: Boolean = false,
     /** Chemin de la voix neuronale hors-ligne installée (null = voix du système). */
     val neuralVoicePath: String? = null,
+    /** Bulle animée par-dessus les applications pendant que Forge écoute ou parle. */
+    val islandEnabled: Boolean = true,
+    /** Veille : Forge se réveille quand on dit « Forge ». */
+    val wakeStandby: Boolean = false,
+    /** Exigence du détecteur (0,4 sensible … 0,8 strict). */
+    val wakeStrictness: Double = 0.55,
 ) {
     companion object {
         private const val FILE = "forge_settings"
@@ -66,6 +72,9 @@ data class ForgeSettings(
                 networkVoices = p.getBoolean("networkVoices", true),
                 morningBriefing = p.getBoolean("briefing", false),
                 neuralVoicePath = p.getString("neuralVoice", null),
+                islandEnabled = p.getBoolean("island", true),
+                wakeStandby = p.getBoolean("wakeStandby", false),
+                wakeStrictness = p.getFloat("wakeStrictness", 0.55f).toDouble(),
             )
         }
     }
@@ -86,6 +95,7 @@ data class ForgeSettings(
             .putFloat("cloudBudget", cloudMonthlyBudget?.toFloat() ?: -1f)
             .putString("searxngUrl", searxngUrl)
             .putBoolean("wakeWord", requireWakeWord).putBoolean("bargeIn", bargeInWithoutHeadset).putBoolean("networkVoices", networkVoices).putBoolean("rateMigrated", true).putBoolean("briefing", morningBriefing).putString("neuralVoice", neuralVoicePath)
+            .putBoolean("island", islandEnabled).putBoolean("wakeStandby", wakeStandby).putFloat("wakeStrictness", wakeStrictness.toFloat())
             .apply()
     }
 }

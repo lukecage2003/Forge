@@ -68,6 +68,29 @@ class ModelDownloader(
     private fun partialSize(dir: File, m: DownloadableModel) = File(dir, m.fileName + ".part").let { if (it.exists()) it.length() else 0L }
 
     companion object {
+        /**
+         * Décompression sûre d'un modèle (archive ZIP) : refuse les chemins qui sortent du dossier
+         * cible (zip-slip) et les archives anormalement volumineuses.
+         */
+        fun unzipSafely(zip: File, destDir: File, maxTotalBytes: Long = 2_000_000_000L): File {
+            val root = destDir.canonicalFile.apply { mkdirs() }
+            var total = 0L
+            java.util.zip.ZipInputStream(zip.inputStream().buffered()).use { z ->
+                generateSequence { z.nextEntry }.forEach { e ->
+                    val out = File(root, e.name).canonicalFile
+                    require(out.path == root.path || out.path.startsWith(root.path + File.separator)) { "Chemin interdit dans l'archive : ${e.name}" }
+                    if (e.isDirectory) out.mkdirs() else {
+                        out.parentFile?.mkdirs()
+                        out.outputStream().use { o ->
+                            val buf = ByteArray(1 shl 16); var n: Int
+                            while (z.read(buf).also { n = it } >= 0) { total += n; require(total <= maxTotalBytes) { "Archive trop volumineuse" }; o.write(buf, 0, n) }
+                        }
+                    }
+                }
+            }
+            return root
+        }
+
         fun sha256(f: File): String {
             val md = MessageDigest.getInstance("SHA-256")
             f.inputStream().use { i -> val b = ByteArray(1 shl 20); var n: Int; while (i.read(b).also { n = it } >= 0) md.update(b, 0, n) }

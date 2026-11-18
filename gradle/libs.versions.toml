@@ -19,6 +19,8 @@ playServicesAuth = "21.3.0"
 robolectric = "4.14.1"
 mlkitText = "16.0.1"
 work = "2.10.5"
+vosk = "0.3.75"
+lifecycleProcess = "2.9.4"
 androidxTestCore = "1.6.1"
 
 [libraries]
@@ -48,6 +50,8 @@ litertlm = { module = "com.google.ai.edge.litertlm:litertlm-android", version.re
 mediapipe-genai = { module = "com.google.mediapipe:tasks-genai", version.ref = "mediapipeGenai" }
 play-services-auth = { module = "com.google.android.gms:play-services-auth", version.ref = "playServicesAuth" }
 
+vosk-android = { module = "com.alphacephei:vosk-android", version.ref = "vosk" }
+lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.ref = "lifecycleProcess" }
 work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
 mlkit-text = { module = "com.google.mlkit:text-recognition", version.ref = "mlkitText" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }

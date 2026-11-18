@@ -1,5 +1,14 @@
 # Historique des versions
 
+## 0.8.0 — 18/11/2026
+- **Bulle Forge** façon île dynamique : capsule noire autour de la caméra, par-dessus les
+  applications ; s'élargit quand vous parlez (onde dorée qui suit votre voix, transcription en
+  direct), affiche « Je réfléchis… » puis la réponse ; toucher = ouvrir Forge, glisser = fermer.
+- **« Forge » pour l'appeler** : détecteur hors-ligne (Vosk, 42 Mo, Apache 2.0) limité au mot
+  d'appel avec mots leurres anti-faux réveils, sensibilité réglable ; signal sonore discret,
+  question, réponse, puis retour automatique en veille après quelques secondes de silence.
+- Réglages : autorisation d'affichage, installation du mot d'appel, veille, exclusion batterie.
+
 ## 0.7.0 — 18/11/2026
 - **Écoute des longues phrases** : silences naturels, suite de phrase recollée au lieu de remplacer.
 - **Réponses plus rapides** : conversation gardée en mémoire par le moteur local (plus de relecture

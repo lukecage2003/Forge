@@ -39,6 +39,11 @@ class VoiceCoordinator(
     /** Niveau sonore 0..1 pour animer l'orbe (§12.1). */
     val audioLevel = MutableStateFlow(0f)
     val presence = MutableStateFlow(PresenceState.STANDBY)
+    /** Réponse de Forge en cours, au fil de la génération (affichée dans la bulle). */
+    val responseText = MutableStateFlow("")
+    /** Dernière activité (parole de l'utilisateur ou de Forge), pour clore un tour de veille. */
+    @Volatile private var lastActivity = 0L
+    private fun touch() { lastActivity = System.currentTimeMillis() }
     fun signal(s: PresenceSignal) { presence.value = PresenceReducer.reduce(presence.value, s) }
 
     /** Vocabulaire comics + termes appris (persistés). */
@@ -58,9 +63,10 @@ class VoiceCoordinator(
         scope = scope,
         output = output,
         source = ResponseSource { utterance ->
+            responseText.value = ""
             orchestrator().handle(utterance, conversation(), voice = true)
                 .filterIsInstance<OrchestratorEvent.Token>()
-                .map { it.text }
+                .map { touch(); responseText.value = responseText.value + it.text; it.text }
         },
         onInterruptedPartial = { conversation().addInterruptedAssistant(it) },
         onSessionEnd = { input.stop() },
@@ -69,10 +75,10 @@ class VoiceCoordinator(
 
     private val input: AndroidSpeechInput = AndroidSpeechInput(
         context,
-        onPartial = { partialTranscript.value = it; signal(PresenceSignal.PartialTranscript) },
+        onPartial = { partialTranscript.value = it; touch(); signal(PresenceSignal.PartialTranscript) },
         onSpeechStart = { controller.onUserSpeechStarted() },
         onFinal = { raw ->
-            partialTranscript.value = ""
+            partialTranscript.value = ""; touch()
             val corrected = vocabulary.correct(raw)
             val text = if (requireWakeWord) WakeWord.strip(corrected) else corrected
             if (text != null) {
@@ -87,7 +93,7 @@ class VoiceCoordinator(
     init {
         scope.launch {
             controller.state.collect { st ->
-                signal(PresenceSignal.Voice(st))
+                signal(PresenceSignal.Voice(st)); touch()
                 // Semi-duplex : micro coupé pendant que Forge parle (sauf écouteurs), sinon il s'entend lui-même.
                 when (st) {
                     VoiceState.SPEAKING -> if (!DuplexPolicy.listenWhileSpeaking(headsetConnected(), bargeInEnabled)) input.pause()
@@ -100,7 +106,30 @@ class VoiceCoordinator(
 
     /** handsFree : session pilotée par le service de premier plan (notification permanente). */
     fun start(@Suppress("UNUSED_PARAMETER") handsFree: Boolean) { lastError.value = null; controller.start(); input.start() }
-    fun stop() { controller.emergencyStop(); input.stop() }
+    fun stop() { turnWatch?.cancel(); controller.emergencyStop(); input.stop() }
+
+    private var turnWatch: kotlinx.coroutines.Job? = null
+
+    /**
+     * Tour de parole déclenché par « Forge » : on écoute la question, Forge répond, et le tour se
+     * clôt seul après [idleMs] de silence (on peut enchaîner plusieurs questions sans redire « Forge »).
+     */
+    fun startTurn(idleMs: Long = 7_000, firstSpeechMs: Long = 9_000, onEnded: () -> Unit) {
+        turnWatch?.cancel()
+        lastError.value = null; responseText.value = ""; partialTranscript.value = ""
+        val startedAt = System.currentTimeMillis(); lastActivity = startedAt
+        controller.start(); input.start()
+        turnWatch = scope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(400)
+                val quiet = System.currentTimeMillis() - lastActivity
+                val nothingYet = lastActivity == startedAt
+                if (state.value == VoiceState.LISTENING && partialTranscript.value.isBlank() && quiet > (if (nothingYet) firstSpeechMs else idleMs)) break
+            }
+            input.stop(); controller.emergencyStop()
+            onEnded()
+        }
+    }
     /** Bouton « Interrompre » : équivalent de « attends ». */
     fun interrupt() { controller.onFinalUtterance("attends"); input.resume() }
 }

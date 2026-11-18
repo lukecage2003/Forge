@@ -99,6 +99,14 @@ data class DownloadableModel(
             license = "CC-BY 4.0 (Kyutai)", ramMb = 400, quality = 0, contextTokens = 0,
         )
 
+        /** Détecteur du mot d'appel « Forge » : Vosk, petit modèle français (Apache 2.0), 42 Mo. */
+        val VOSK_FR = DownloadableModel(
+            id = "vosk-fr-small", displayName = "Mot d'appel « Forge »", tagline = "Écoute légère, hors-ligne",
+            url = "https://alphacephei.com/vosk/models/vosk-model-small-fr-0.22.zip", fileName = "vosk-model-small-fr-0.22.zip",
+            sizeBytes = 42_233_323, sha256 = "cabf6180e177eb9b3a9a9d43a437bd5e549f3a7d09525e5d69a3fed787be12ad",
+            license = "Apache 2.0 (Alpha Cephei)", ramMb = 150, quality = 0, contextTokens = 0,
+        )
+
         val RECOMMENDED = GEMMA4_E4B
         val CATALOG = listOf(GEMMA4_E4B, GEMMA4_E2B, QWEN25_1_5B)
         fun byFileName(name: String) = CATALOG.firstOrNull { it.fileName == name }

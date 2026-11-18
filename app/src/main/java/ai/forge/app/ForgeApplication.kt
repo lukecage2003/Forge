@@ -329,6 +329,28 @@ class AppContainer(val app: Application) {
         scope.launch { voice.tts.selectBestVoice(networkAvailable.value) }
     }
 
+    /** Dossier du modèle de mot d'appel installé, ou null. */
+    fun wakeModelDir(): String? = java.io.File(app.filesDir, "wake/vosk-model-small-fr-0.22").takeIf { java.io.File(it, "conf/model.conf").exists() }?.absolutePath
+
+    val wakeInstall = MutableStateFlow<String?>(null)
+    /** Installation du mot d'appel « Forge » (42 Mo) : téléchargement vérifié, décompression sûre. */
+    fun installWakeWord(onReady: () -> Unit) {
+        val m = DownloadableModel.VOSK_FR
+        scope.launch {
+            wakeInstall.value = "Téléchargement… 0 %"
+            val dir = java.io.File(app.filesDir, "wake")
+            when (val r = ModelDownloader().download(m, dir) { d, t -> wakeInstall.value = "Téléchargement… ${d * 100 / t} %" }) {
+                is ModelDownloader.Result.Ready -> {
+                    wakeInstall.value = "Installation…"
+                    runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ModelDownloader.unzipSafely(r.file, dir); r.file.delete() } }
+                        .onSuccess { wakeInstall.value = "Mot d'appel installé."; onReady() }
+                        .onFailure { wakeInstall.value = "Installation impossible : ${it.message}" }
+                }
+                is ModelDownloader.Result.Failed -> wakeInstall.value = r.reason
+            }
+        }
+    }
+
     /** Installation de la voix neuronale (127 Mo) : téléchargement vérifié puis activation. */
     val neuralVoiceInstall = MutableStateFlow<String?>(null)
     fun installNeuralVoice() {
