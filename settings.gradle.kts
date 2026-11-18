@@ -30,6 +30,7 @@ include(
     ":forge-evaluation",
     ":forge-reasoning",
     ":forge-actions",
+    ":forge-academy",
 )
 
 // Application Android : incluse seulement si un SDK Android est configuré,
