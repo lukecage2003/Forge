@@ -41,6 +41,8 @@ data class ForgeSettings(
     val islandEnabled: Boolean = true,
     /** Pastille visible en permanence pendant la veille (sinon la bulle n'apparaît qu'au réveil). */
     val islandIdleVisible: Boolean = false,
+    /** Préférer l'intégration système (Live Update, Android 16) à la bulle dessinée par Forge. */
+    val systemIsland: Boolean = true,
     /** Veille aussi écran éteint (processeur maintenu éveillé : consomme plus de batterie). */
     val wakeScreenOff: Boolean = false,
     /** Reconnaissance vocale Parakeet (hors-ligne) quand elle est installée. */
@@ -80,6 +82,7 @@ data class ForgeSettings(
                 neuralVoicePath = p.getString("neuralVoice", null),
                 islandEnabled = p.getBoolean("island", true),
                 islandIdleVisible = p.getBoolean("islandIdle", false),
+                systemIsland = p.getBoolean("systemIsland", true),
                 wakeScreenOff = p.getBoolean("wakeScreenOff", false),
                 useParakeet = p.getBoolean("useParakeet", true),
                 wakeStandby = p.getBoolean("wakeStandby", false),
@@ -104,7 +107,7 @@ data class ForgeSettings(
             .putFloat("cloudBudget", cloudMonthlyBudget?.toFloat() ?: -1f)
             .putString("searxngUrl", searxngUrl)
             .putBoolean("wakeWord", requireWakeWord).putBoolean("bargeIn", bargeInWithoutHeadset).putBoolean("networkVoices", networkVoices).putBoolean("rateMigrated", true).putBoolean("briefing", morningBriefing).putString("neuralVoice", neuralVoicePath)
-            .putBoolean("island", islandEnabled).putBoolean("islandIdle", islandIdleVisible).putBoolean("wakeScreenOff", wakeScreenOff).putBoolean("useParakeet", useParakeet).putBoolean("wakeStandby", wakeStandby).putFloat("wakeStrictness", wakeStrictness.toFloat())
+            .putBoolean("island", islandEnabled).putBoolean("islandIdle", islandIdleVisible).putBoolean("systemIsland", systemIsland).putBoolean("wakeScreenOff", wakeScreenOff).putBoolean("useParakeet", useParakeet).putBoolean("wakeStandby", wakeStandby).putFloat("wakeStrictness", wakeStrictness.toFloat())
             .apply()
     }
 }

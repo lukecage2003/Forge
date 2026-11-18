@@ -169,6 +169,20 @@ fun SettingsScreen(container: AppContainer) {
                         Hint("En haut de l'écran, par-dessus vos applications : votre voix en onde dorée, puis la réponse de Forge.") }
                     Switch(s.islandEnabled, { s = s.copy(islandEnabled = it) }, colors = switchColors)
                 }
+                if (s.islandEnabled) {
+                    val liveOk = ai.forge.app.island.LiveUpdate.available(ctx)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) { Text("Intégration au système", color = ForgePalette.Text)
+                            Hint(when {
+                                android.os.Build.VERSION.SDK_INT < 36 -> "Nécessite Android 16 : la bulle de Forge est utilisée à la place."
+                                liveOk -> "Activée : la conversation s'affiche comme une notification en direct (barre d'état, Now Bar), sans rien masquer."
+                                else -> "Autorisez les « notifications en direct » de Forge pour l'activer ; en attendant, la bulle est utilisée."
+                            }) }
+                        Switch(s.systemIsland, { s = s.copy(systemIsland = it) }, colors = switchColors)
+                    }
+                    if (s.systemIsland && android.os.Build.VERSION.SDK_INT >= 36 && !liveOk)
+                        GlassPill("Autoriser les notifications en direct") { runCatching { ctx.startActivity(ai.forge.app.island.LiveUpdate.settingsIntent(ctx)) } }
+                }
                 if (s.islandEnabled) Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) { Text("Pastille en veille", color = ForgePalette.Text)
                         Hint("Petite pastille autour de la caméra même quand Forge attend. Désactivé : la bulle n'apparaît que quand vous dites « Forge ».") }

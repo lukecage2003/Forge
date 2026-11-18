@@ -53,7 +53,8 @@ data class IslandState(
  * Compacte = veille ; élargie = écoute (onde qui suit la voix) ; grande = réponse en cours.
  */
 @Composable
-fun ForgeIsland(s: IslandState, onTap: () -> Unit, onDismiss: () -> Unit, compactHeight: androidx.compose.ui.unit.Dp = 30.dp) {
+fun ForgeIsland(s: IslandState, onTap: () -> Unit, onDismiss: () -> Unit, compactHeight: androidx.compose.ui.unit.Dp = 30.dp,
+                expandedTop: androidx.compose.ui.unit.Dp = 0.dp) {
     val speaking = s.presence == PresenceState.RESPONDING && s.reply.isNotBlank()
     val listening = s.presence == PresenceState.LISTENING || s.presence == PresenceState.UNDERSTANDING
     // Compacte : à peine plus large que la caméra ; élargie : limitée à la largeur de l'écran.
@@ -61,7 +62,8 @@ fun ForgeIsland(s: IslandState, onTap: () -> Unit, onDismiss: () -> Unit, compac
     val glow by animateFloatAsState(if (listening) 0.35f + 0.65f * s.level else if (s.expanded) 0.35f else 0f, tween(120), label = "glow")
     val shape = RoundedCornerShape(if (s.expanded) 30.dp else compactHeight / 2)
 
-    Box(Modifier.padding(top = if (s.expanded) 6.dp else 3.dp).padding(horizontal = 8.dp), contentAlignment = Alignment.TopCenter) {
+    // Élargie, la bulle se place SOUS la barre d'état (heure, réseau, batterie restent visibles).
+    Box(Modifier.padding(top = if (s.expanded) expandedTop + 6.dp else 3.dp).padding(horizontal = 8.dp), contentAlignment = Alignment.TopCenter) {
         Box(
             Modifier
                 .animateContentSize(spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow))

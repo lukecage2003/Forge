@@ -36,6 +36,7 @@ class VoiceSessionService : LifecycleService() {
     private var appVisible = true
     private var lingering = false
     private var wakeLock: android.os.PowerManager.WakeLock? = null
+    private var live: ai.forge.app.island.LiveUpdate? = null
     private var lingerJob: kotlinx.coroutines.Job? = null
 
     private val visibility = object : DefaultLifecycleObserver {
@@ -48,6 +49,8 @@ class VoiceSessionService : LifecycleService() {
         ProcessLifecycleOwner.get().lifecycle.addObserver(visibility)
         overlay = IslandOverlay(this, this, container).also { it.onDismiss = { endTurnEarly() } }
         container.onEndWakeTurn = { endTurnEarly() }
+        live = ai.forge.app.island.LiveUpdate(this, container,
+            PendingIntent.getService(this, 3, Intent(this, VoiceSessionService::class.java).setAction(ACTION_END_TURN), PendingIntent.FLAG_IMMUTABLE))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -56,6 +59,7 @@ class VoiceSessionService : LifecycleService() {
         if (intent?.action != ACTION_STOP) { container.warmUpLocalModel(); container.voice.warmUpRecognizer() }
         when (intent?.action) {
             ACTION_STOP -> { shutdown(); return START_NOT_STICKY }
+            ACTION_END_TURN -> { endTurnEarly(); return START_STICKY }
             ACTION_STANDBY -> {
                 startForeground(NOTIF_ID, notification("Dites « Forge » pour me parler."), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
                 standby = true
@@ -132,7 +136,11 @@ class VoiceSessionService : LifecycleService() {
         // Hors conversation, la veille reste discrète : rien au-dessus de la barre d'état, sauf si
         // l'utilisateur a choisi la pastille permanente.
         val talking = inTurn || lingering || container.voice.state.value != ai.forge.voice.VoiceState.IDLE
-        val wanted = container.settings.islandEnabled && !appVisible && (talking || (standby && container.settings.islandIdleVisible))
+        val enabled = container.settings.islandEnabled && !appVisible
+        // Android 16 : la conversation passe par le système (Live Update) au lieu de la bulle dessinée.
+        val system = container.settings.systemIsland && ai.forge.app.island.LiveUpdate.available(this)
+        if (system && enabled && talking) live?.start(lifecycleScope) else live?.stop()
+        val wanted = enabled && if (system) false else (talking || (standby && container.settings.islandIdleVisible))
         overlay?.expanded?.value = talking
         if (wanted) overlay?.show() else overlay?.hide()
     }
@@ -143,7 +151,7 @@ class VoiceSessionService : LifecycleService() {
         holdCpu(false)
         wake?.release(); wake = null
         container.voice.stop()
-        overlay?.hide()
+        overlay?.hide(); live?.stop()
         stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()
     }
 
@@ -170,6 +178,7 @@ class VoiceSessionService : LifecycleService() {
         private const val NOTIF_ID = 42
         const val ACTION_STOP = "ai.forge.app.STOP_VOICE"
         const val ACTION_STANDBY = "ai.forge.app.STANDBY"
+        const val ACTION_END_TURN = "ai.forge.app.END_TURN"
         fun start(context: Context) = context.startForegroundService(Intent(context, VoiceSessionService::class.java))
         fun standby(context: Context) = context.startForegroundService(Intent(context, VoiceSessionService::class.java).setAction(ACTION_STANDBY))
         fun stop(context: Context) = context.startService(Intent(context, VoiceSessionService::class.java).setAction(ACTION_STOP))

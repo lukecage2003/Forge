@@ -62,7 +62,7 @@ class IslandOverlay(private val context: Context, private val owner: LifecycleOw
                     val heard by container.voice.partialTranscript.collectAsState()
                     val reply by container.voice.responseText.collectAsState()
                     val big by expanded.collectAsState()
-                    ForgeIsland(IslandState(presence, level, heard, reply, big), compactHeight = geo.compactHeight,
+                    ForgeIsland(IslandState(presence, level, heard, reply, big), compactHeight = geo.compactHeight, expandedTop = geo.statusBar,
                         onTap = { context.startActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) },
                         onDismiss = { onDismiss() })
                 }
@@ -72,7 +72,7 @@ class IslandOverlay(private val context: Context, private val owner: LifecycleOw
     }
 
     /** Position de la caméra frontale et hauteur de la barre d'état, pour coller au matériel. */
-    private data class Geometry(val centerOffsetPx: Int, val compactHeight: androidx.compose.ui.unit.Dp)
+    private data class Geometry(val centerOffsetPx: Int, val compactHeight: androidx.compose.ui.unit.Dp, val statusBar: androidx.compose.ui.unit.Dp)
 
     private fun geometry(): Geometry {
         val density = context.resources.displayMetrics.density
@@ -84,8 +84,8 @@ class IslandOverlay(private val context: Context, private val owner: LifecycleOw
             val offset = cutout?.let { it.centerX() - m.bounds.width() / 2 } ?: 0
             // Pastille un peu moins haute que la barre d'état : elle entoure la caméra sans déborder.
             val h = ((statusTop / density) - 6f).coerceIn(26f, 40f)
-            Geometry(offset, androidx.compose.ui.unit.Dp(h))
-        }.getOrDefault(Geometry(0, androidx.compose.ui.unit.Dp(30f)))
+            Geometry(offset, androidx.compose.ui.unit.Dp(h), androidx.compose.ui.unit.Dp(statusTop / density))
+        }.getOrDefault(Geometry(0, androidx.compose.ui.unit.Dp(30f), androidx.compose.ui.unit.Dp(36f)))
     }
 
     fun hide() { view?.let { runCatching { wm.removeViewImmediate(it) } }; view = null }

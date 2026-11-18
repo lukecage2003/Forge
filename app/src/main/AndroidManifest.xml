@@ -14,6 +14,8 @@
     <!-- Bulle Forge par-dessus les applications (accordée par l'utilisateur dans les réglages). -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Android 16 : conversation affichée comme Live Update (barre d'état, Now Bar). -->
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <!-- Veille « Forge » : demander à ne pas être endormi par l'optimisation de batterie. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Action « réveil » (niveau 2, réversible). -->
