@@ -48,6 +48,7 @@ sealed interface OrchestratorEvent {
     data class MemoryEvent(val outcome: RememberOutcome) : OrchestratorEvent
     /** Contenu externe contenant une tentative d'instruction : signalé, jamais exécuté. */
     data class SecurityWarning(val source: String, val findings: List<String>) : OrchestratorEvent
+    data class ResearchDone(val sourceCount: Int, val bibliography: String, val refused: Int) : OrchestratorEvent
     data class ActionProposed(val call: ToolCall) : OrchestratorEvent
     data class ActionResult(val call: ToolCall, val outcome: ActionOutcome) : OrchestratorEvent
     data class Completed(val fullText: String) : OrchestratorEvent
@@ -70,6 +71,8 @@ class Orchestrator(
     /** Actions Android : null = aucune action possible (Forge le dit au lieu de faire semblant). */
     private val actionPlanner: ActionPlanner? = null,
     private val actionExecutor: ToolCallExecutor? = null,
+    /** Recherche Web (null = indisponible : Forge le dit, il ne simule pas de recherche). */
+    private val researchTool: ResearchTool? = null,
 ) {
     fun handle(input: String, ctx: ConversationContext, voice: Boolean, forcedDepth: ThinkingDepth? = null): Flow<OrchestratorEvent> = flow {
         // 1. Mémoire : uniquement ce que l'utilisateur veut explicitement conserver.
@@ -113,18 +116,34 @@ class Orchestrator(
 
         ctx.add(ChatMessage(Role.USER, input))
 
+        // 3 bis. Recherche Web réelle pour les demandes de recherche.
+        var bibliography: String? = null
+        var researchNote: String? = null
+        if (intent.primary == SpecialistId.RESEARCH || SpecialistId.RESEARCH in intent.supporting && intent.depth >= ThinkingDepth.DEEP_RESEARCH) {
+            val tool = researchTool
+            if (tool == null) researchNote = "Aucune recherche Web n'a pu être effectuée (outil indisponible ou hors-ligne) : réponds avec tes connaissances en le signalant clairement, sans inventer de source."
+            else runCatching { tool.research(input) }.onSuccess { r ->
+                emit(OrchestratorEvent.ResearchDone(r.sourceCount, r.bibliography, r.refusedCount))
+                if (r.suspiciousCount > 0) emit(OrchestratorEvent.SecurityWarning("recherche Web", listOf("${r.suspiciousCount} page(s) contenant des tentatives d'instruction")))
+                researchNote = r.promptContext
+                bibliography = r.bibliography.takeIf { r.sourceCount > 0 }
+            }.onFailure { researchNote = "La recherche Web a échoué (${it.message}) : signale-le et n'invente aucune source." }
+        }
+
         // 4. Spécialistes de soutien (mode approfondi) : notes de travail internes.
         val notes = StringBuilder()
         for (id in steps.filter { it != intent.primary && it != SpecialistId.QUALITY_CONTROL }) {
             emit(OrchestratorEvent.StepStarted(id))
             val spec = Specialists[id]
             val r = provider.complete(request(spec, ctx, voice = false, memoryContext,
-                extra = "Fournis des notes de travail concises pour aider le spécialiste « ${primary.name} ». Ne rédige pas la réponse finale.", securityRule = securityRule))
+                extra = listOfNotNull(researchNote, "Fournis des notes de travail concises pour aider le spécialiste « ${primary.name} ». Ne rédige pas la réponse finale.").joinToString("\n\n"), securityRule = securityRule))
             r.onSuccess { notes.appendLine("### Notes ${spec.name}\n$it") }
         }
 
         emit(OrchestratorEvent.StepStarted(intent.primary))
-        val extra = notes.takeIf { it.isNotEmpty() }?.let { "Notes internes des autres spécialistes :\n$it" }
+        val extra = listOfNotNull(researchNote, notes.takeIf { it.isNotEmpty() }?.let { "Notes internes des autres spécialistes :\n$it" })
+            .joinToString("\n\n").ifEmpty { null }
+        val sourcesFooter = bibliography?.let { if (voice) "" else "\n\nSources consultées :\n$it" }.orEmpty()
 
         if (!intent.needsVerification) {
             // Diffusion directe (latence minimale).
@@ -138,6 +157,7 @@ class Orchestrator(
                 }
             }
             failed?.let { emit(OrchestratorEvent.Failed(it)); return@flow }
+            if (sourcesFooter.isNotEmpty()) { text.append(sourcesFooter); emit(OrchestratorEvent.Token(sourcesFooter)) }
             ctx.add(ChatMessage(Role.ASSISTANT, text.toString()))
             recordUsage(provider.id, ctx, text.toString())
             emit(OrchestratorEvent.Completed(text.toString()))
@@ -161,12 +181,13 @@ class Orchestrator(
                 extra = "Ta première version présentait ces problèmes :\n$issues\nProduis une version corrigée complète.\nPremière version :\n$draft", securityRule = securityRule))
                 .getOrDefault(draft)
         } else draft
+        val finalWithSources = final + sourcesFooter
         emit(OrchestratorEvent.QualityReview(verdict, issues, revised = verdict == "REVISER"))
         // Diffusion de la version finale par phrases (lisible par la synthèse vocale).
-        final.split(Regex("(?<=[.!?…])\\s+")).forEach { emit(OrchestratorEvent.Token("$it ")) }
-        ctx.add(ChatMessage(Role.ASSISTANT, final))
+        finalWithSources.split(Regex("(?<=[.!?…])\\s+")).forEach { emit(OrchestratorEvent.Token("$it ")) }
+        ctx.add(ChatMessage(Role.ASSISTANT, finalWithSources))
         recordUsage(provider.id, ctx, draft + review + final)
-        emit(OrchestratorEvent.Completed(final))
+        emit(OrchestratorEvent.Completed(finalWithSources))
     }
 
     private fun request(spec: SpecialistSpec, ctx: ConversationContext, voice: Boolean, memoryContext: String, extra: String?, securityRule: String? = null): ChatRequest {

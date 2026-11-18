@@ -95,6 +95,7 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
             val buf = StringBuilder()
             container.orchestrator.handle(text, container.conversation, voice = false).collect { e ->
                 when (e) {
+                    is OrchestratorEvent.ResearchDone -> lines[idx] = lines[idx].copy(meta = (lines[idx].meta ?: "") + " · ${e.sourceCount} source(s) consultée(s)")
                     is OrchestratorEvent.ActionResult -> if (e.outcome.status == ai.forge.reasoning.ActionOutcome.Status.NEEDS_CONFIRMATION)
                         lines[idx] = lines[idx].copy(pendingAction = e.call)
                     is OrchestratorEvent.SecurityWarning -> lines += ChatLine("Sécurité", "Contenu externe suspect ignoré comme instruction (${e.source}) : ${e.findings.joinToString()}")
@@ -192,6 +193,7 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
     var anthropicKey by remember { mutableStateOf("") }
     var oaiKey by remember { mutableStateOf("") }
     var testResult by remember { mutableStateOf<String?>(null) }
+    var braveKey by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     Scaffold(topBar = {
         TopAppBar(title = { Text("Réglages") }, navigationIcon = {
@@ -231,6 +233,12 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
                 }) { Text("Tester les connexions") }
                 testResult?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
+            item { Text("Recherche Web", style = MaterialTheme.typography.titleMedium) }
+            item { OutlinedTextField(s.searxngUrl.orEmpty(), { s = s.copy(searxngUrl = it.ifBlank { null }) },
+                label = { Text("SearXNG (recommandé, auto-hébergeable) — URL") }, modifier = Modifier.fillMaxWidth()) }
+            item { OutlinedTextField(braveKey, { braveKey = it }, label = { Text("Clé Brave Search (facultatif, service tiers)") }, modifier = Modifier.fillMaxWidth()) }
+            item { Text("La requête de recherche est envoyée au service choisi ; vos documents et souvenirs ne le sont jamais.",
+                style = MaterialTheme.typography.bodySmall, color = ForgePalette.TextMuted) }
             item { Text("Fournisseurs externes (cloud)", style = MaterialTheme.typography.titleMedium) }
             item { Text("Données qu'ils peuvent recevoir. Les comics, Drive et cours ne partent jamais sans votre accord explicite ici.",
                 style = MaterialTheme.typography.bodySmall, color = ForgePalette.TextMuted) }
@@ -270,6 +278,7 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
                 Button(onClick = {
                     if (anthropicKey.isNotBlank()) container.keys.put("anthropic", anthropicKey)
                     if (oaiKey.isNotBlank()) container.keys.put("oai", oaiKey)
+                    if (braveKey.isNotBlank()) container.keys.put("brave", braveKey)
                     container.voice.tts.speechRate = s.speechRate
                     container.updateSettings(s)
                     onBack()

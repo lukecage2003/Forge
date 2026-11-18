@@ -45,6 +45,7 @@ dependencies {
     implementation(project(":forge-research"))
     implementation(project(":forge-actions"))
     implementation(project(":forge-academy"))
+    implementation(project(":forge-browser"))
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

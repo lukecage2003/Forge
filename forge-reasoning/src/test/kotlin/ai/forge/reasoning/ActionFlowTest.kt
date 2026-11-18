@@ -81,3 +81,26 @@ class ActionFlowTest {
         assertTrue(done.fullText.contains("aucune action n'a été exécutée"))
     }
 }
+
+class ResearchFlowTest {
+    private fun memory() = MemoryManager(InMemoryMemoryStore(), HashingEmbedder())
+
+    @Test fun researchSourcesAreInjectedAndBibliographyAppendedByCode() = runTest {
+        val tool = ResearchTool { q -> ResearchContext("[1] Source A : le vibranium absorbe l'énergie.", "[1] Source A — https://a.example", 1, 2, 0) }
+        val p = ScriptedProvider(capabilities = ProviderCapabilities(Locality.ON_DEVICE, 32_000, reasoningQuality = 5)) { req ->
+            if (req.messages.first().content.contains("VERDICT")) "VERDICT: OK\nPROBLEMES: aucun" else "D'après [1], le vibranium absorbe l'énergie."
+        }
+        val o = Orchestrator(ProviderRouter(listOf(p)), memory(), researchTool = tool)
+        val ev = o.handle("Fais une recherche sur les sources récentes concernant le vibranium", ConversationContext("r"), voice = false).toList()
+        assertEquals(1, ev.filterIsInstance<OrchestratorEvent.ResearchDone>().single().sourceCount)
+        assertTrue(p.requests.first().messages.first().content.contains("Source A"))
+        val done = ev.filterIsInstance<OrchestratorEvent.Completed>().single().fullText
+        assertTrue(done.endsWith("[1] Source A — https://a.example"), done)
+    }
+
+    @Test fun withoutResearchToolForgeSaysSo() = runTest {
+        val p = ScriptedProvider(capabilities = ProviderCapabilities(Locality.ON_DEVICE, 32_000, reasoningQuality = 5)) { "VERDICT: OK\nPROBLEMES: aucun" }
+        Orchestrator(ProviderRouter(listOf(p)), memory()).handle("Recherche les sources sur ce sujet", ConversationContext("r2"), voice = false).toList()
+        assertTrue(p.requests.first().messages.first().content.contains("Aucune recherche Web n'a pu être effectuée"))
+    }
+}

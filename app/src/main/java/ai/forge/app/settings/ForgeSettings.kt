@@ -24,6 +24,8 @@ data class ForgeSettings(
     val cloudTasks: Set<TaskCategory> = setOf(TaskCategory.CONVERSATION, TaskCategory.REASONING, TaskCategory.WRITING),
     val cloudDailyRequestLimit: Int? = 100,
     val cloudMonthlyBudget: Double? = null,
+    /** Recherche Web : SearXNG (idéalement auto-hébergé) ; Brave nécessite une clé (stockée chiffrée). */
+    val searxngUrl: String? = null,
 ) {
     companion object {
         private const val FILE = "forge_settings"
@@ -46,6 +48,7 @@ data class ForgeSettings(
                     ?: setOf(TaskCategory.CONVERSATION, TaskCategory.REASONING, TaskCategory.WRITING),
                 cloudDailyRequestLimit = p.getInt("cloudDaily", 100).takeIf { it > 0 },
                 cloudMonthlyBudget = p.getFloat("cloudBudget", -1f).takeIf { it >= 0 }?.toDouble(),
+                searxngUrl = p.getString("searxngUrl", null),
             )
         }
     }
@@ -64,6 +67,7 @@ data class ForgeSettings(
             .putStringSet("cloudTasks", cloudTasks.map { it.name }.toSet())
             .putInt("cloudDaily", cloudDailyRequestLimit ?: 0)
             .putFloat("cloudBudget", cloudMonthlyBudget?.toFloat() ?: -1f)
+            .putString("searxngUrl", searxngUrl)
             .apply()
     }
 }

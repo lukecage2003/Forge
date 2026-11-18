@@ -24,6 +24,13 @@ import ai.forge.reasoning.Orchestrator
 import ai.forge.reasoning.ActionOutcome
 import ai.forge.reasoning.ActionPlanner
 import ai.forge.reasoning.ToolCallExecutor
+import ai.forge.reasoning.ResearchContext
+import ai.forge.reasoning.ResearchTool
+import ai.forge.browser.BraveSearchProvider
+import ai.forge.browser.PageFetcher
+import ai.forge.browser.ResearchSession
+import ai.forge.browser.SearchProvider
+import ai.forge.browser.SearxngSearchProvider
 import ai.forge.actions.ActionStatus
 import ai.forge.actions.ActionEngine
 import ai.forge.models.UsageLimits
@@ -120,7 +127,25 @@ class AppContainer(private val app: Application) {
             memory,
             actionPlanner = ActionPlanner { tools.specs() },
             actionExecutor = actionExecutor,
+            researchTool = researchTool(),
         )
+    }
+
+    /** Fournisseur de recherche configuré, ou null (hors-ligne, non configuré, ou tiers en mode local strict). */
+    fun searchProvider(): SearchProvider? {
+        if (!networkAvailable.value) return null
+        settings.searxngUrl?.takeIf { it.isNotBlank() }?.let { return SearxngSearchProvider(it) }
+        if (settings.localOnly) return null
+        return keys.get("brave")?.let { BraveSearchProvider(it) }
+    }
+
+    private fun researchTool(): ResearchTool? {
+        val provider = searchProvider() ?: return null
+        val session = ResearchSession(provider, PageFetcher())
+        return ResearchTool { q ->
+            val d = session.run(q)
+            ResearchContext(d.promptContext, d.bibliography(), d.sources.size, d.refused.size, d.sources.count { it.suspicious })
+        }
     }
 
     private fun rebuild() { orchestrator = buildOrchestrator() }
