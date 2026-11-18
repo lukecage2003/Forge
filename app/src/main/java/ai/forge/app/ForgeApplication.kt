@@ -197,14 +197,20 @@ class AppContainer(val app: Application) {
         if (!networkAvailable.value) return null
         settings.searxngUrl?.takeIf { it.isNotBlank() }?.let { return SearxngSearchProvider(it) }
         if (settings.localOnly) return null
-        return keys.get("brave")?.let { BraveSearchProvider(it) }
+        keys.get("brave")?.let { return BraveSearchProvider(it) }
+        // Par défaut, sans aucun réglage : Wikipédia + wikis Marvel et DC (API publiques, sans clé).
+        return ai.forge.browser.CompositeSearchProvider(
+            general = listOf(ai.forge.browser.MediaWikiSearchProvider.wikipediaFr()),
+            comics = listOf(ai.forge.browser.MediaWikiSearchProvider.marvelWiki(), ai.forge.browser.MediaWikiSearchProvider.dcWiki()),
+        )
     }
 
     private fun researchTool(): ResearchTool? {
         val provider = searchProvider() ?: return null
         val session = ResearchSession(provider, PageFetcher())
         return ResearchTool { q ->
-            val d = session.run(q)
+            // Rapide : 4 sources, extraits courts (le contexte d'un modèle embarqué est limité).
+            val d = session.run(q, maxSources = 4, excerptChars = 1_200)
             ResearchContext(d.promptContext, d.bibliography(), d.sources.size, d.refused.size, d.sources.count { it.suspicious })
         }
     }

@@ -127,7 +127,10 @@ class Orchestrator(
         // 3 bis. Recherche Web réelle pour les demandes de recherche.
         var bibliography: String? = null
         var researchNote: String? = null
-        if (intent.primary == SpecialistId.RESEARCH || SpecialistId.RESEARCH in intent.supporting && intent.depth >= ThinkingDepth.DEEP_RESEARCH) {
+        // Recherche automatique : demandes de recherche, mais aussi comics et éditorial (faits à vérifier).
+        val wantsResearch = intent.primary in setOf(SpecialistId.RESEARCH, SpecialistId.COMICS, SpecialistId.EDITORIAL) ||
+            (SpecialistId.RESEARCH in intent.supporting && intent.depth >= ThinkingDepth.DEEP_RESEARCH)
+        if (wantsResearch && (researchTool != null || intent.primary == SpecialistId.RESEARCH)) {
             val tool = researchTool
             if (tool == null) researchNote = "Aucune recherche Web n'a pu être effectuée (outil indisponible ou hors-ligne) : réponds avec tes connaissances en le signalant clairement, sans inventer de source."
             else runCatching { tool.research(input) }.onSuccess { r ->

@@ -92,3 +92,35 @@ class BrowserTest {
         assertIs<FetchResult.Refused>(f.fetch("file:///etc/passwd"))
     }
 }
+
+class MediaWikiTest {
+    @Test fun parsesMediaWikiSearchAndBuildsArticleUrls() = runTest {
+        MockWebServer().use { s ->
+            s.enqueue(MockResponse().setBody("""{"query":{"search":[{"title":"Black Panther (T'Challa)","snippet":"le <span class=\"searchmatch\">vibranium</span> absorbe"}]}}"""))
+            s.start()
+            val p = MediaWikiSearchProvider("t", "Test", "${s.hostName}:${s.port}", scheme = "http")
+            val r = p.search("vibranium", 5, "fr").single()
+            assertEquals("Black Panther (T'Challa)", r.title)
+            assertEquals("le vibranium absorbe", r.snippet)
+            assertTrue(r.url.endsWith("/wiki/Black_Panther_%28T%27Challa%29"), r.url)
+            val req = s.takeRequest()
+            assertTrue(req.path!!.startsWith("/api.php?action=query&list=search&srsearch=vibranium"))
+            assertTrue(req.getHeader("User-Agent")!!.startsWith("ForgeAssistant"))
+        }
+    }
+
+    @Test fun compositeInterleavesSkipsFailuresAndUsesComicsWikisOnlyForComics() = runTest {
+        fun fake(id: String, n: Int, fail: Boolean = false) = object : SearchProvider {
+            override val id = id; override val displayName = id; override val thirdParty = true
+            var calls = 0
+            override suspend fun search(query: String, limit: Int, language: String): List<SearchResult> {
+                calls++; if (fail) error("panne"); return (1..n).map { SearchResult("https://$id/$it", "$id$it", "") }
+            }
+        }
+        val wiki = fake("wiki", 3); val broken = fake("broken", 0, fail = true); val marvel = fake("marvel", 3)
+        val c = CompositeSearchProvider(listOf(wiki, broken), listOf(marvel))
+        assertEquals(listOf("marvel1", "wiki1", "marvel2", "wiki2"), c.search("Qui a créé Black Panther ?", 4, "fr").map { it.title })
+        assertEquals(listOf("wiki1", "wiki2"), c.search("histoire de la Révolution française", 2, "fr").map { it.title })
+        assertEquals(1, marvel.calls)
+    }
+}
