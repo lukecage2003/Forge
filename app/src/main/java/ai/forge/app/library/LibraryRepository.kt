@@ -27,8 +27,11 @@ class LibraryRepository(private val dir: File, private val ocr: OcrEngine) {
     suspend fun indexDriveFile(drive: DriveConnector, f: DriveConnector.DriveFile, onProgress: (Int, Int) -> Unit = { _, _ -> }) = lock.withLock {
         if (!index.register(f.id, f.name, f.md5Checksum ?: f.modifiedTime ?: f.size ?: "inconnu")) return@withLock
         val local = drive.download(f)
-        if (f.name.endsWith(".cbz", true) || f.mimeType.contains("zip")) ComicIndexer(SafeArchive(), ocr).indexCbz(index, f.id, local, onProgress)
-        else index.fail(f.id, "Format pas encore pris en charge pour l'indexation : ${f.mimeType}")
+        when {
+            f.name.endsWith(".cbz", true) || f.mimeType.contains("zip") -> ComicIndexer(SafeArchive(), ocr).indexCbz(index, f.id, local, onProgress)
+            f.name.endsWith(".pdf", true) || f.mimeType == "application/pdf" -> indexPdf(f.id, local, onProgress)
+            else -> index.fail(f.id, "Format non pris en charge : ${f.mimeType}")
+        }
         save()
     }
 
@@ -48,9 +51,10 @@ class LibraryRepository(private val dir: File, private val ocr: OcrEngine) {
         }
         val fingerprint = digest.digest().joinToString("") { "%02x".format(it) }
         val id = "local:$fingerprint"
-        val target = File(cache, "$fingerprint.cbz"); tmp.renameTo(target)
+        val isPdf = name.endsWith(".pdf", true)
+        val target = File(cache, fingerprint + if (isPdf) ".pdf" else ".cbz"); tmp.renameTo(target)
         if (index.register(id, name, fingerprint)) {
-            ComicIndexer(SafeArchive(), ocr).indexCbz(index, id, target, onProgress)
+            if (isPdf) indexPdf(id, target, onProgress) else ComicIndexer(SafeArchive(), ocr).indexCbz(index, id, target, onProgress)
             save()
         }
     }
@@ -62,6 +66,29 @@ class LibraryRepository(private val dir: File, private val ocr: OcrEngine) {
         index.addUserPage(id, reference, text.ifBlank { "(aucun texte lisible sur la page)" })
         save()
         text
+    }
+
+    /** Comics/documents PDF : rendu de chaque page puis OCR sur l'appareil. */
+    private suspend fun indexPdf(id: String, file: File, onProgress: (Int, Int) -> Unit) = withContext(Dispatchers.IO) {
+        runCatching {
+            val texts = mutableListOf<ai.forge.documents.PageText>()
+            android.os.ParcelFileDescriptor.open(file, android.os.ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
+                android.graphics.pdf.PdfRenderer(fd).use { pdf ->
+                    for (i in 0 until pdf.pageCount) {
+                        onProgress(i + 1, pdf.pageCount)
+                        pdf.openPage(i).use { page ->
+                            val scale = 1600f / maxOf(page.width, page.height)
+                            val bmp = android.graphics.Bitmap.createBitmap((page.width * scale).toInt(), (page.height * scale).toInt(), android.graphics.Bitmap.Config.ARGB_8888)
+                            bmp.eraseColor(android.graphics.Color.WHITE)
+                            page.render(bmp, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                            val jpg = java.io.ByteArrayOutputStream().also { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, it); bmp.recycle() }.toByteArray()
+                            texts += ocr.recognize(jpg).copy(page = i + 1)
+                        }
+                    }
+                }
+            }
+            index.complete(id, texts)
+        }.onFailure { index.fail(id, "PDF illisible : ${it.message}") }
     }
 
     /** Page de cours importée : citable avec titre et numéro de page. */

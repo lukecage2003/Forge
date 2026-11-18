@@ -75,6 +75,8 @@ dependencies {
     implementation(libs.kotlinx.coroutines.play.services)
     // OCR sur l'appareil (alphabet latin, modèle embarqué : fonctionne hors-ligne).
     implementation(libs.mlkit.text)
+    // Tâches de fond : indexation de la bibliothèque, briefing du matin.
+    implementation(libs.work.runtime)
 
     testImplementation(kotlin("test"))
     testImplementation(libs.kotlinx.coroutines.test)

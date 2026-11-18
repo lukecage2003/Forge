@@ -97,6 +97,8 @@ class AppContainer(val app: Application) {
     val voiceRequested = MutableStateFlow(false)
     /** Texte proposé dans la barre de saisie depuis un autre écran (Studio, Études…). */
     val prefill = MutableStateFlow<String?>(null)
+    /** Jeton Google Drive de la session (jamais enregistré sur le disque). */
+    @Volatile var driveToken: String? = null
 
     /** Arrêt d'urgence global : voix ET actions. */
     fun emergencyStop() { voice.stop(); actions.engageKillSwitch() }

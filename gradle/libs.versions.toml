@@ -17,6 +17,7 @@ litertlm = "0.19.1"
 playServicesAuth = "21.3.0"
 robolectric = "4.14.1"
 mlkitText = "16.0.1"
+work = "2.10.5"
 androidxTestCore = "1.6.1"
 
 [libraries]
@@ -45,6 +46,7 @@ litertlm = { module = "com.google.ai.edge.litertlm:litertlm-android", version.re
 mediapipe-genai = { module = "com.google.mediapipe:tasks-genai", version.ref = "mediapipeGenai" }
 play-services-auth = { module = "com.google.android.gms:play-services-auth", version.ref = "playServicesAuth" }
 
+work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
 mlkit-text = { module = "com.google.mlkit:text-recognition", version.ref = "mlkitText" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 androidx-test-core = { module = "androidx.test:core", version.ref = "androidxTestCore" }

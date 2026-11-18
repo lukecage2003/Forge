@@ -29,6 +29,12 @@ fun LibraryScreen(container: AppContainer) {
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        // Plusieurs fichiers : indexation en arrière-plan (continue même si vous quittez Forge).
+        if (uris.size > 2) {
+            ai.forge.app.library.LibraryIndexWorker.enqueue(context, uris)
+            progress = "${uris.size} fichiers en cours d'indexation en arrière-plan (voir la notification)."
+            return@rememberLauncherForActivityResult
+        }
         container.scope.launch {
             uris.forEachIndexed { i, uri ->
                 val name = displayName(uri)
@@ -46,13 +52,15 @@ fun LibraryScreen(container: AppContainer) {
     Column(Modifier.fillMaxSize()) {
         LargeTitle("Comics", "Votre bibliothèque, lue sur le téléphone.")
         Column(Modifier.padding(horizontal = 16.dp)) {
-            GoldButton("Ajouter des comics (CBZ)", Modifier.fillMaxWidth()) {
-                picker.launch(arrayOf("application/zip", "application/x-cbz", "application/vnd.comicbook+zip", "application/octet-stream"))
+            GoldButton("Ajouter des comics (CBZ, PDF)", Modifier.fillMaxWidth()) {
+                picker.launch(arrayOf("application/zip", "application/x-cbz", "application/vnd.comicbook+zip", "application/pdf", "application/octet-stream"))
             }
             Text("Les fichiers restent sur votre téléphone. Forge lit les pages et vous indique toujours le numéro et la page.",
                 Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall, color = ForgePalette.TextMuted)
             progress?.let { Text(it, color = ForgePalette.Gold, modifier = Modifier.padding(top = 8.dp)) }
         }
+        Spacer(Modifier.height(12.dp))
+        DriveSection(container) { files = container.library.index.all() }
         LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = TabBarSpace + 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(files, key = { it.fileId }) { f ->
                 GlassSurface(Modifier.fillMaxWidth(), shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp), live = false) {
