@@ -8,8 +8,8 @@ Rien n'est déclaré terminé sans vérification réelle (et, à partir de J1, s
 | Catégorie | Contenu | État |
 |---|---|---|
 | **Fondations** | Modules, contrats, sécurité (autorisations, sortie des données, anti-injection), mémoire, routage, évaluation | ✅ fait, testé (JVM) |
-| **Indispensables** | App compilée et installée ; conversation écrite et vocale ; mémoire persistante ; Action Center ; hors-ligne | 🟡 code écrit, compilation à faire (J1) |
-| **Importantes** | Recherche Web sourcée ; Drive + indexation ; lecture PDF/CBZ + OCR ; éditorial de bout en bout ; Academy dans l'app | 🟡 logique prête pour éditorial/Academy ; connecteurs à faire |
+| **Indispensables** | App compilée ; conversation écrite et vocale ; mémoire persistante ; Action Center ; hors-ligne | ✅ compilé et testé (Robolectric) — 🟡 reste la validation sur S25 |
+| **Importantes** | Recherche Web sourcée ; bibliothèque CBZ + OCR ; éditorial et Academy dans l'app ; Drive | ✅ recherche et bibliothèque — 🟡 écrans Éditorial/Academy, connexion Drive, PDF |
 | **Avancées** | Détection des cases ; appels d'outils par le modèle ; voix neuronale propre ; llama.cpp ; embedder sémantique | ⬜ |
 | **Expérimentales** | Reconnaissance de personnages ; duplex sans écouteurs ; AppFunctions ; mot d'activation | ⬜ (faisabilité incertaine, voir AUDIT §5) |
 
@@ -20,6 +20,8 @@ Rien n'est déclaré terminé sans vérification réelle (et, à partir de J1, s
 - **L3** Éditorial §9.4–9.7 : style oral, vérification et statut « Vérifié », production, SRT, Motion Studio.
 - **L4** Forge Academy (§10). **L5** Évaluation continue à erreurs critiques (§16).
 - **L6** Intégration app : présence visuelle, Action Center, autorisations cloud, test de connexion.
+- **L7** Compilation Android, lint, tests Robolectric ; actions de bout en bout (scénario G).
+- **L8** Recherche Web (scénario C) ; bibliothèque CBZ + OCR (scénario D) ; écrans Mémoire et Bibliothèque ; modèle local par fichier.
 
 ## Première tranche fonctionnelle proposée (J1) — « Forge parle, se souvient, et agit prudemment »
 Objectif mesurable sur le S25, couvrant les scénarios A, B, G et H :
@@ -30,7 +32,7 @@ Objectif mesurable sur le S25, couvrant les scénarios A, B, G et H :
 5. Mode avion : conversation locale maintenue, recherche signalée indisponible (scénario H).
 6. Mesures : premier jeton, latence voix-à-voix, RAM, température après 10 min, batterie/heure.
 
-Prérequis bloquant : **SDK Android** (licences à accepter par le propriétaire) et un S25 connecté.
+Prérequis restant : installer l'APK sur le S25 et exécuter la grille de mesures (`docs/TESTING.md`).
 
 ## Lots suivants
 - **J1** Compilation, tests instrumentés, tranche fonctionnelle ci-dessus, rapport de mesures.

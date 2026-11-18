@@ -1,39 +1,39 @@
 # État réel du projet
 
-Ce qui fonctionne, ce qui est écrit mais non vérifié, ce qui n'existe pas. Mise à jour : 18/11/2026 (v0.2.0).
+Ce qui fonctionne, ce qui est écrit mais non vérifié sur appareil, ce qui n'existe pas. Mise à jour : 18/11/2026 (v0.3.0).
 
-## Vérifié : compilé et testé (JVM)
-`./gradlew test` → **79 tests, 0 échec**, 12 modules testés (`forge-core` ne contient que des types partagés).
+## Vérifié : compilé et testé
+- `./gradlew test` → **96 tests JVM, 0 échec** (14 modules).
+- `./gradlew :app:testDebugUnitTest` → **7 tests Android (Robolectric), 0 échec**.
+- `./gradlew :app:assembleDebug` → APK construit ; **Android Lint : 0 erreur**.
 
-| Module | Tests | Ce qui est démontré |
-|---|---|---|
-| forge-security | 7 | Plafond d'autonomie, confirmation unique, expiration, audit ; anti-injection ; politique de sortie |
-| forge-models | 10 | SSE OpenAI-compatible et Anthropic, erreurs HTTP, test de connexion réel, cache, coûts/limites, ressources (LRU, thermique, batterie), bascule hors-ligne |
-| forge-memory | 9 | Rappel avec provenance, doublons, contradictions, confirmation, rétention, export |
-| forge-voice | 7 | Fin de tour, interruptions, découpage oral, annulation de la parole, états de présence |
-| forge-reasoning | 11 | Routage, diffusion, contrôle qualité + révision, mémoire explicite, **comics jamais vers un cloud non autorisé**, injection encadrée et signalée, refus expliqué |
-| forge-comic-intelligence | 7 | Invariants P1–P5, champs inconnus signalés, noms de fichiers |
-| forge-editorial | 12 | Style oral, 8 types d'anomalies, statut « Vérifié », cadence 3–5 s sans image imposée, SRT, export Motion Studio conditionnel |
-| forge-academy | 5 | Cours cités par page, fiches mot pour mot, SM-2, [Cours]/[Hors cours], lacunes, planning, examen |
-| forge-actions | 2 | Journal de résultats réels, arrêt d'urgence qui annule et bloque |
-| forge-evaluation | 5 | Erreur critique jamais masquée, banc mémoire, références inventées, sonde de latence |
-| forge-writing, forge-research | 3 | Prompts de correction/corrigé, typographie, sources et corroboration |
+| Domaine | Démontré par les tests |
+|---|---|
+| Démarrage | L'application et l'écran principal Compose démarrent sans plantage (Robolectric) |
+| Scénario B — mémoire | Souvenirs persistés dans Room, retrouvés par une nouvelle instance, suppression durable |
+| Scénario C — recherche | Recherche → pages consultées (robots.txt, pas de contournement, hôtes privés refusés) → sources encadrées et classées → bibliographie ajoutée par le code |
+| Scénario D — bibliothèque | CBZ sécurisé → OCR → page retrouvée avec titre, numéro, année, fichier → piste « non vérifiée » ≤ P2, P1 seulement après consultation |
+| Scénario E/F — éditorial | Vérification, statut « Vérifié », storyboard, SRT, export Motion Studio conditionnel |
+| Scénario G — actions | « Mets un réveil à 7h15 » → portail → Intent ACTION_SET_ALARM réellement émis (7 h 15) → journal → blocage après arrêt d'urgence |
+| Scénario H — hors-ligne | Routage vers les moteurs locaux, recherche désactivée et signalée |
+| Sécurité | Aucune donnée privée vers un cloud non autorisé ; injections signalées ; secrets jamais transmis |
+| Drive | Pagination, analyse des noms de comics, reprise de téléchargement, cache par empreinte (serveur simulé) |
 
-## Écrit mais NON compilé : `app/`
-Le SDK Android n'est pas installé dans l'environnement de développement : l'acceptation de ses
-licences revient au propriétaire. Des erreurs de compilation sont probables (API MediaPipe, icônes,
-signatures Compose). **Aucun test sur appareil, aucune mesure de performance réelle.**
+## Pas encore vérifié
+- **Aucun test sur un Galaxy S25 réel** : latence, RAM, température, batterie, qualité vocale restent à mesurer.
+- Pas d'émulateur disponible dans l'environnement de développement (pas de virtualisation KVM).
+- Moteur MediaPipe, OCR ML Kit, reconnaissance et synthèse vocales : compilés, non exécutés réellement.
+- Connexion Google Drive : nécessite un identifiant OAuth Android créé par vous (voir SETUP).
 
 ## Limites connues
 - Interruption vocale sans écouteurs : risque d'écho (bouton « Interrompre » disponible).
 - `HashingEmbedder` est lexical, pas sémantique.
 - Analyse d'intention par règles : peut se tromper sur des formulations inattendues.
-- Les contrôles éditoriaux sont des heuristiques : ils complètent le Fact Checker, ne le remplacent pas.
-- Coûts : estimations à partir d'un tarif saisi par l'utilisateur, jetons estimés (≈ 4 caractères).
-- Le modèle ne déclenche pas encore lui-même d'actions (pas d'appel d'outils) : l'Action Engine existe,
-  son branchement sur le modèle est prévu en J3.
+- OCR des lettrages de comics stylisés : fiabilité moyenne, d'où le statut « piste à vérifier ».
+- Les contrôles éditoriaux sont des heuristiques : ils complètent le Fact Checker.
+- Coûts : estimations à partir d'un tarif saisi ; jetons estimés.
+- Indexation de la bibliothèque au premier plan (pas encore de WorkManager) ; PDF non indexés.
 
 ## Pas encore développé
-Recherche/navigation Web, lecture PDF/CBZ, OCR, détection des cases, indexation Drive en arrière-plan,
-exports DOCX, voix neuronale propre, llama.cpp, embedder sémantique, écrans Mémoire/Projets/Recherche/
-Drive/Comics/Éditorial/Academy/Modèles dans l'app. Voir `ROADMAP.md`.
+Écrans Projets/Recherche/Éditorial/Academy, interface de connexion Drive, indexation PDF, détection
+des cases, WorkManager, export DOCX, voix neuronale propre, llama.cpp, embedder sémantique.

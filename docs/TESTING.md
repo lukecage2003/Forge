@@ -1,7 +1,7 @@
 # Stratégie de tests et d'évaluation (§16)
 
 ## Ce qui existe
-`./gradlew test` exécute **79 tests unitaires et d'intégration JVM** répartis dans 12 modules.
+`./gradlew test` exécute **96 tests JVM** (14 modules) ; `./gradlew :app:testDebugUnitTest` exécute **7 tests Android** sous Robolectric (démarrage de l'app, Room, Drive, bibliothèque, scénario G).
 
 | Type | Où | Exemples |
 |---|---|---|
@@ -25,3 +25,14 @@
 | Performances | premier jeton, voix-à-voix, temps de chargement des modèles, débit d'indexation |
 | Évaluation par modèle | `Evaluator.honestyBaseline` + `ReferenceGuard` exécutés contre chaque moteur configuré |
 | UI | tests Compose des états de présence et de l'Action Center |
+
+## Grille de validation sur le Galaxy S25 (à remplir lors du premier essai)
+| Mesure | Méthode | Cible indicative | Résultat |
+|---|---|---|---|
+| Premier jeton (modèle local) | Réglages → message court ; chronomètre | < 1,5 s | à mesurer |
+| Voix-à-voix | fin de phrase → début de la voix de Forge | < 2,5 s | à mesurer |
+| RAM avec modèle chargé | `adb shell dumpsys meminfo ai.forge.app` | < 4,5 Go | à mesurer |
+| Température après 10 min de conversation | `adb shell dumpsys thermalservice` | pas de bridage SEVERE | à mesurer |
+| Batterie | 30 min de conversation vocale | < 10 % | à mesurer |
+| Interruption « attends » | 10 essais, avec et sans écouteurs | ≥ 9/10 avec écouteurs | à mesurer |
+| Indexation OCR | CBZ de 24 pages | < 60 s | à mesurer |

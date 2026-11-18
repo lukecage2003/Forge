@@ -8,8 +8,8 @@ rédaction Primestone Media, correction et corrigés pédagogiques — sous un c
 
 | Partie | Contenu | État |
 |---|---|---|
-| 13 modules `forge-*` | Cerveau en Kotlin/JVM pur : sécurité, moteurs, mémoire, voix, raisonnement, comics, éditorial, Academy, actions, évaluation | Compile, **79 tests passent** |
-| `app/` | Application Android (Compose) : voix, Room, modèle local, Drive, actions, Action Center, réglages | Écrit, **pas encore compilé** |
+| 15 modules `forge-*` | Cerveau en Kotlin/JVM pur : sécurité, moteurs, mémoire, voix, raisonnement, recherche Web, documents, comics, éditorial, Academy, actions, évaluation | **96 tests passent** |
+| `app/` | Application Android (Compose) : voix, Room, modèle local, OCR, bibliothèque, recherche, Drive, actions, mémoire, réglages | **Compile**, lint sans erreur, **7 tests Robolectric** ; pas encore essayée sur un S25 |
 | `docs/` | Audit, architecture, état réel, plan, tests, permissions, Motion Studio, installation | — |
 
 ## Démarrer

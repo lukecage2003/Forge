@@ -36,15 +36,16 @@ fournit que les « capteurs et effecteurs » : micro, haut-parleur, stockage, Dr
 | `forge-editorial` | Formats, rôles Primestone, style oral, vérification, production, SRT, Motion Studio | core, comics, writing |
 | `forge-academy` | Cours, explications, fiches, SM-2, quiz, lacunes, planning, examens | core, memory, writing |
 | `forge-actions` | Moteur d'actions, journal, arrêt d'urgence, catalogue des mécanismes Android | core, security |
+| `forge-browser` | Recherche Web interchangeable, récupération respectueuse (robots.txt), extraction lisible, dossier de sources | core, security, research |
+| `forge-documents` | CBZ sécurisé, index de bibliothèque par page, OCR interchangeable, brouillons de preuves | core, memory, comics |
 | `forge-evaluation` | Retours, leçons, versions d'instructions, bancs, bilans à erreurs critiques | core, memory, models, comics |
 
 Aucune dépendance circulaire (graphe vérifié par Gradle, qui refuse les cycles entre projets).
 
 **Modules du §13.1 non encore créés, et pourquoi :** `forge-conversation` (aujourd'hui dans
 `forge-reasoning` : `ConversationContext` ; à extraire avec la persistance de l'historique),
-`forge-browser`, `forge-drive`, `forge-documents` (le code dépendant d'Android vit dans `app/` ;
-les modules seront créés avec leur logique pure : extraction lisible, indexation progressive,
-découpage CBZ/PDF), `forge-ui` (sera un module Android séparé quand `app/` compilera). Créer des
+`forge-drive` (le connecteur REST vit dans `app/` car il dépend de l'authentification Google ;
+sa logique d'indexation est dans `forge-documents`), `forge-ui` (sera un module Android séparé quand `app/` compilera). Créer des
 modules vides n'apporterait rien (§20 : « ne pas générer artificiellement des fichiers »).
 
 ### Contrats principaux entre modules
