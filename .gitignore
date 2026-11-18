@@ -1,0 +1,11 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.DS_Store
+captures/
+.kotlin/
+# Secrets : ne jamais committer de clés
+*.keystore
+secrets.properties
