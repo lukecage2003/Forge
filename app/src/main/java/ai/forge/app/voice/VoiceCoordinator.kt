@@ -33,7 +33,7 @@ class VoiceCoordinator(
     val presence = MutableStateFlow(PresenceState.STANDBY)
     fun signal(s: PresenceSignal) { presence.value = PresenceReducer.reduce(presence.value, s) }
 
-    private val controller = VoiceSessionController(
+    private val controller: VoiceSessionController = VoiceSessionController(
         scope = scope,
         output = tts,
         source = ResponseSource { utterance ->
@@ -46,7 +46,7 @@ class VoiceCoordinator(
     )
     val state: StateFlow<VoiceState> = controller.state
 
-    private val input = AndroidSpeechInput(
+    private val input: AndroidSpeechInput = AndroidSpeechInput(
         context,
         onPartial = { partialTranscript.value = it; signal(PresenceSignal.PartialTranscript) },
         onSpeechStart = { controller.onUserSpeechStarted() },

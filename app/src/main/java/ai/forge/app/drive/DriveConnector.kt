@@ -26,6 +26,7 @@ class DriveConnector(
     private val accessToken: suspend () -> String,
     private val cacheDir: File,
     private val client: OkHttpClient = OkHttpClient(),
+    private val baseUrl: String = "https://www.googleapis.com",
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -60,7 +61,7 @@ class DriveConnector(
         val out = mutableListOf<DriveFile>()
         var page: String? = null
         do {
-            val url = "https://www.googleapis.com/drive/v3/files".toHttpUrl().newBuilder()
+            val url = "$baseUrl/drive/v3/files".toHttpUrl().newBuilder()
                 .addQueryParameter("q", q)
                 .addQueryParameter("fields", "nextPageToken,files(id,name,mimeType,size,md5Checksum,modifiedTime,parents)")
                 .addQueryParameter("pageSize", "200")
@@ -84,7 +85,7 @@ class DriveConnector(
         if (target.exists()) return@withContext target
         val offset = if (partial.exists()) partial.length() else 0L
         val req = Request.Builder()
-            .url("https://www.googleapis.com/drive/v3/files/${file.id}?alt=media")
+            .url("$baseUrl/drive/v3/files/${file.id}?alt=media")
             .header("Authorization", "Bearer ${accessToken()}")
             .apply { if (offset > 0) header("Range", "bytes=$offset-") }
             .build()

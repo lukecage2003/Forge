@@ -16,7 +16,9 @@ android {
         minSdk = 31
         targetSdk = 35
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "0.2.0"
+        // Galaxy S25 = arm64-v8a ; x86_64 conservé pour un émulateur de développement.
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
 
     buildTypes {
@@ -32,6 +34,7 @@ android {
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
+    testOptions { unitTests.isIncludeAndroidResources = true }
 }
 
 dependencies {
@@ -63,4 +66,25 @@ dependencies {
     // Autorisation Google (OAuth, portée minimale) pour Google Drive.
     implementation(libs.play.services.auth)
     implementation(libs.kotlinx.coroutines.play.services)
+
+    testImplementation(kotlin("test"))
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+}
+
+// Robolectric : l'image Android est résolue par Gradle (cache, proxy, reproductible) plutôt que
+// téléchargée à l'exécution, puis fournie en mode hors-ligne.
+val robolectricRuntime: Configuration by configurations.creating
+dependencies { robolectricRuntime("org.robolectric:android-all-instrumented:15-robolectric-12650502-i7") }
+val robolectricDir = layout.buildDirectory.dir("robolectric-jars")
+val prepareRobolectric by tasks.registering(Copy::class) {
+    from(robolectricRuntime)
+    into(robolectricDir)
+}
+tasks.withType<Test>().configureEach {
+    dependsOn(prepareRobolectric)
+    systemProperty("robolectric.offline", "true")
+    systemProperty("robolectric.dependency.dir", robolectricDir.get().asFile.absolutePath)
 }

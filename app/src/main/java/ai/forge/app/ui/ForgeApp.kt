@@ -23,6 +23,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -206,9 +208,11 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
                 // §14 : tester réellement chaque moteur configuré (appel de disponibilité, aucune donnée privée envoyée).
                 OutlinedButton(onClick = {
                     scope.launch {
-                        testResult = container.providers().joinToString("\n") { p ->
-                            "${p.displayName} : " + p.testConnection().fold({ it }, { "échec — ${it.message}" })
-                        }.ifEmpty { "Aucun moteur configuré." }
+                        val results = mutableListOf<String>()
+                        for (p in container.providers()) {
+                            results += "${p.displayName} : " + p.testConnection().fold({ it }, { "échec — ${it.message}" })
+                        }
+                        testResult = results.joinToString("\n").ifEmpty { "Aucun moteur configuré." }
                     }
                 }) { Text("Tester les connexions") }
                 testResult?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
