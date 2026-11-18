@@ -1,0 +1,53 @@
+package ai.forge.app.settings
+
+import ai.forge.core.model.AutonomyLevel
+import android.content.Context
+
+/** Réglages non secrets (moteurs, autonomie, voix). Les clés API vont dans [SecureKeyStore]. */
+data class ForgeSettings(
+    val localModelPath: String? = null,
+    /** Serveur compatible OpenAI sur le réseau local (ex. Ollama sur un PC : http://192.168.1.10:11434/v1). */
+    val lanServerUrl: String? = null,
+    val lanModel: String? = null,
+    val openAiCompatibleUrl: String? = null,
+    val openAiCompatibleModel: String? = null,
+    val anthropicModel: String = "claude-sonnet-5-5",
+    val localOnly: Boolean = false,
+    val autonomyCeiling: AutonomyLevel = AutonomyLevel.L2_REVERSIBLE,
+    val voiceName: String? = null,
+    val speechRate: Float = 1.0f,
+    val showTranscript: Boolean = true,
+) {
+    companion object {
+        private const val FILE = "forge_settings"
+        fun load(context: Context): ForgeSettings {
+            val p = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+            return ForgeSettings(
+                localModelPath = p.getString("localModelPath", null),
+                lanServerUrl = p.getString("lanServerUrl", null),
+                lanModel = p.getString("lanModel", null),
+                openAiCompatibleUrl = p.getString("oaiUrl", null),
+                openAiCompatibleModel = p.getString("oaiModel", null),
+                anthropicModel = p.getString("anthropicModel", null) ?: "claude-sonnet-5-5",
+                localOnly = p.getBoolean("localOnly", false),
+                autonomyCeiling = runCatching { AutonomyLevel.valueOf(p.getString("autonomy", null)!!) }.getOrDefault(AutonomyLevel.L2_REVERSIBLE),
+                voiceName = p.getString("voiceName", null),
+                speechRate = p.getFloat("speechRate", 1.0f),
+                showTranscript = p.getBoolean("showTranscript", true),
+            )
+        }
+    }
+
+    fun save(context: Context) {
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit()
+            .putString("localModelPath", localModelPath)
+            .putString("lanServerUrl", lanServerUrl).putString("lanModel", lanModel)
+            .putString("oaiUrl", openAiCompatibleUrl).putString("oaiModel", openAiCompatibleModel)
+            .putString("anthropicModel", anthropicModel)
+            .putBoolean("localOnly", localOnly)
+            .putString("autonomy", autonomyCeiling.name)
+            .putString("voiceName", voiceName).putFloat("speechRate", speechRate)
+            .putBoolean("showTranscript", showTranscript)
+            .apply()
+    }
+}

@@ -1,0 +1,3 @@
+-keep class com.google.mediapipe.** { *; }
+-dontwarn com.google.mediapipe.**
+-keepclassmembers class kotlinx.serialization.json.** { *; }
