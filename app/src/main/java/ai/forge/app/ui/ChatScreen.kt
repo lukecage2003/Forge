@@ -77,6 +77,8 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
     val brain by container.brain.collectAsState()
     val brainDetail by container.brainDetail.collectAsState()
     val listState = rememberLazyListState()
+    var pageToImport by remember { mutableStateOf<android.net.Uri?>(null) }
+    val pagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> pageToImport = uri }
 
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) { VoiceSessionService.start(context); voiceOn = true }
@@ -120,6 +122,10 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
     LaunchedEffect(lines.lastOrNull()?.text?.length) { if (lines.isNotEmpty() && busy) listState.scrollToItem(lines.lastIndex, Int.MAX_VALUE / 2) }
 
     val orbState = when { voiceOn -> presence; busy -> PresenceState.THINKING; brain is AppContainer.BrainState.Error -> PresenceState.ERROR; else -> PresenceState.STANDBY }
+
+    pageToImport?.let { uri ->
+        PageImportDialog(container, uri, onDone = { msg -> pageToImport = null; lines += ChatLine("Mémoire", msg) }, onCancel = { pageToImport = null })
+    }
 
     Column(Modifier.fillMaxSize().imePadding()) {
         // En-tête flottant.
@@ -180,6 +186,10 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
         GlassSurface(Modifier.padding(start = 14.dp, end = 14.dp, bottom = TabBarSpace + 6.dp, top = 4.dp).navigationBarsPadding().fillMaxWidth(),
             shape = RoundedCornerShape(30.dp), contentPadding = PaddingValues(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.AddPhotoAlternate, "Ajouter une page de comic comme preuve", tint = ForgePalette.GoldSoft,
+                    modifier = Modifier.padding(end = 10.dp).size(24.dp).clickableNoRipple {
+                        pagePicker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    })
                 Box(Modifier.weight(1f).padding(vertical = 10.dp)) {
                     if (input.isEmpty()) Text(if (voiceOn) "Parlez, je vous écoute…" else "Demandez n'importe quoi…",
                         style = MaterialTheme.typography.bodyLarge, color = ForgePalette.TextMuted)

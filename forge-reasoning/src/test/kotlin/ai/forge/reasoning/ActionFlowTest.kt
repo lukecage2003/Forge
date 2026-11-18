@@ -190,3 +190,19 @@ class PersonaTest {
         assertTrue(ai.forge.core.persona.ForgePersona.systemPrompt(voice = true).length < 2_200)  // prompt compact = réponse plus rapide
     }
 }
+
+class DebateFlowTest {
+    @Test fun debateAnswerIsAuditedAgainstRealEvidence() = runTest {
+        val lib = LibraryTool { listOf(LibraryPassage("Black Panther #8, p. 14", "le costume absorbe l'impact", verified = true)) }
+        val p = ScriptedProvider(capabilities = ProviderCapabilities(Locality.ON_DEVICE, 32_000, reasoningQuality = 4)) {
+            "### POSITION\nAvantage T'Challa.\n### ARGUMENTS\n1. Le costume absorbe les coups [B1].\n2. Il est plus rapide que Thor.\n### VERDICT\nT'Challa."
+        }
+        val o = Orchestrator(ProviderRouter(listOf(p)), MemoryManager(InMemoryMemoryStore(), HashingEmbedder()), libraryTool = lib)
+        val ev = o.handle("Débat : qui gagne entre Black Panther et Thor ?", ConversationContext("d"), voice = false).toList()
+        val done = ev.filterIsInstance<OrchestratorEvent.Completed>().single().fullText
+        assertTrue(done.contains("1/2"), done)
+        assertTrue(done.contains("Non sourcé"))
+        assertEquals(1, p.requests.size)                      // une seule passe, contrôle déterministe
+        assertTrue(p.requests.first().messages.first().content.contains("B1 (vérifiée)"))
+    }
+}

@@ -81,4 +81,11 @@ class DocumentsTest {
         assertEquals(IndexStatus.FAILED, index.status("e")!!.status)
         assertTrue(index.status("e")!!.error!!.contains("Archive refusée"))
     }
+
+    @Test fun userProvidedPageIsSearchableAndVerified() {
+        val index = LibraryIndex()
+        index.addUserPage("u1", ai.forge.comics.ComicReference("Black Panther", issue = "8", year = 2016, page = 14), "Ce costume absorbe chaque impact.")
+        val hit = index.search("costume absorbe impact").single()
+        assertTrue(hit.file.userVerified); assertEquals(14, hit.page); assertEquals("8", hit.reference.issue)
+    }
 }

@@ -214,7 +214,8 @@ class AppContainer(val app: Application) {
         return ResearchTool { q ->
             // Rapide : 4 sources, extraits courts (le contexte d'un modèle embarqué est limité).
             val d = session.run(q, maxSources = 4, excerptChars = 1_200)
-            ResearchContext(d.promptContext, d.bibliography(), d.sources.size, d.refused.size, d.sources.count { it.suspicious })
+            ResearchContext(d.promptContext, d.bibliography(), d.sources.size, d.refused.size, d.sources.count { it.suspicious },
+                d.sources.map { it.citation.title to it.citation.url })
         }
     }
 

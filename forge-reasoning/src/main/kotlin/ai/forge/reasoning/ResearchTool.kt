@@ -7,6 +7,8 @@ data class ResearchContext(
     val sourceCount: Int,
     val refusedCount: Int,
     val suspiciousCount: Int,
+    /** (titre, url) de chaque source numérotée, dans l'ordre [1], [2]… */
+    val citations: List<Pair<String, String>> = emptyList(),
 )
 
 /** Outil de recherche Web (implémenté par forge-browser côté application). */

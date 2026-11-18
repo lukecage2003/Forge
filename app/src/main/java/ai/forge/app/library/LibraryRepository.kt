@@ -55,6 +55,15 @@ class LibraryRepository(private val dir: File, private val ocr: OcrEngine) {
         }
     }
 
+    /** Page de comic fournie par l'utilisateur : OCR sur l'appareil, enregistrée comme preuve vérifiée. */
+    suspend fun addUserPage(image: ByteArray, reference: ai.forge.comics.ComicReference): String = lock.withLock {
+        val text = ocr.recognize(image).text
+        val id = "page:" + java.util.UUID.randomUUID()
+        index.addUserPage(id, reference, text.ifBlank { "(aucun texte lisible sur la page)" })
+        save()
+        text
+    }
+
     suspend fun forget(fileId: String) = lock.withLock { index.forget(fileId); save() }
 
     fun summary(): String {
@@ -68,6 +77,6 @@ class LibraryRepository(private val dir: File, private val ocr: OcrEngine) {
 
     /** Outil exposé à l'orchestrateur : null si rien n'est indexé (Forge le dira). */
     fun tool(): LibraryTool? = if (index.all().none { it.status == IndexStatus.INDEXED }) null else LibraryTool { q ->
-        index.search(q, limit = 6).map { h -> LibraryPassage(h.reference.display(), h.excerpt, verified = false) }
+        index.search(q, limit = 6).map { h -> LibraryPassage(h.reference.display(), h.excerpt, verified = h.file.userVerified) }
     }
 }

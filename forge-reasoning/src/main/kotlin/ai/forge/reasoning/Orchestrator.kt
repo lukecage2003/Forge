@@ -130,6 +130,8 @@ class Orchestrator(
         // 3 bis. Recherche Web réelle pour les demandes de recherche.
         var bibliography: String? = null
         var researchNote: String? = null
+        var researchCitations: List<Pair<String, String>> = emptyList()
+        var libraryPassages: List<LibraryPassage> = emptyList()
         // Recherche automatique : demandes de recherche, mais aussi comics et éditorial (faits à vérifier).
         val wantsResearch = intent.primary in setOf(SpecialistId.RESEARCH, SpecialistId.COMICS, SpecialistId.EDITORIAL) ||
             (SpecialistId.RESEARCH in intent.supporting && intent.depth >= ThinkingDepth.DEEP_RESEARCH)
@@ -140,6 +142,7 @@ class Orchestrator(
                 emit(OrchestratorEvent.ResearchDone(r.sourceCount, r.bibliography, r.refusedCount))
                 if (r.suspiciousCount > 0) emit(OrchestratorEvent.SecurityWarning("recherche Web", listOf("${r.suspiciousCount} page(s) contenant des tentatives d'instruction")))
                 researchNote = r.promptContext
+                researchCitations = r.citations
                 bibliography = r.bibliography.takeIf { r.sourceCount > 0 }
             }.onFailure { researchNote = "La recherche Web a échoué (${it.message}) : signale-le et n'invente aucune source." }
         }
@@ -149,6 +152,7 @@ class Orchestrator(
             val lib = libraryTool
             val passages = lib?.let { runCatching { it.search(input) }.getOrDefault(emptyList()) }.orEmpty()
             if (lib != null) emit(OrchestratorEvent.LibraryResults(passages))
+            libraryPassages = passages
             val libNote = when {
                 lib == null -> "La bibliothèque personnelle n'est pas indexée : ne cite aucune page ni aucun numéro comme s'ils venaient d'elle."
                 passages.isEmpty() -> "Aucun passage correspondant dans la bibliothèque indexée : dis-le, et n'invente aucune référence."
@@ -162,6 +166,23 @@ class Orchestrator(
             researchNote = listOfNotNull(researchNote, libNote).joinToString("\n\n")
             if (passages.isNotEmpty()) bibliography = listOfNotNull(bibliography, passages.mapIndexed { i, p ->
                 "[B${i + 1}] ${p.reference} — ${if (p.verified) "vérifié" else "piste OCR, page à consulter"}" }.joinToString("\n")).joinToString("\n")
+        }
+
+        // Débat comics : chaque argument doit citer une preuve ; contrôle déterministe (rapide, fiable).
+        if (intent.primary == SpecialistId.COMICS && ai.forge.comics.DebateCoach.isDebate(ai.forge.core.text.TextUtils.fold(input))) {
+            val evidence = libraryPassages.mapIndexed { i, p -> ai.forge.comics.DebateEvidence("B${i + 1}", "${p.reference} : ${p.excerpt.take(200)}",
+                    ai.forge.comics.SourceTier.ORIGINAL_COMIC, p.verified) } +
+                researchCitations.mapIndexed { i, (title, url) -> ai.forge.comics.DebateEvidence("S${i + 1}", "$title ($url)",
+                    if (Regex("wiki|fandom").containsMatchIn(url)) ai.forge.comics.SourceTier.WIKI_COMMUNITY else ai.forge.comics.SourceTier.RECOGNIZED_DATABASE, false) }
+            val extra = listOfNotNull(ai.forge.comics.DebateCoach.prompt(evidence), researchNote?.let { "Dans les sources Web ci-dessous, la source [n] correspond à l'étiquette [Sn].\n$it" })
+                .joinToString("\n\n")
+            val answer = provider.complete(request(primary, ctx, voice, memoryContext, extra, securityRule)).getOrElse {
+                emit(OrchestratorEvent.Failed(it.message ?: "Échec de génération")); return@flow
+            }
+            val audit = ai.forge.comics.DebateCoach.audit(answer, evidence)
+            val text = answer.trim() + if (voice) "" else "\n\n" + audit.report() + sourcesFooter(bibliography, voice)
+            emit(OrchestratorEvent.Token(text)); ctx.add(ChatMessage(Role.ASSISTANT, answer.trim())); recordUsage(provider.id, ctx, answer)
+            emit(OrchestratorEvent.Completed(text)); return@flow
         }
 
         // Studio de scripts : format structuré, contrôle de rétention déterministe, une révision au besoin.
@@ -314,6 +335,8 @@ class Orchestrator(
         recordUsage(provider.id, ctx, raw)
         return text
     }
+
+    private fun sourcesFooter(bibliography: String?, voice: Boolean) = bibliography?.let { if (voice) "" else "\n\nSources consultées :\n$it" }.orEmpty()
 
     private fun recordUsage(providerId: String, ctx: ConversationContext, output: String) {
         val input = ctx.turns.joinToString(" ") { it.content }

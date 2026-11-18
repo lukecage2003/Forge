@@ -35,6 +35,8 @@ data class IndexedFile(
     val pageCount: Int = 0,
     val error: String? = null,
     val reference: ComicReference,
+    /** Page fournie et identifiée par l'utilisateur lui-même : preuve vérifiée. */
+    val userVerified: Boolean = false,
 )
 
 @Serializable
@@ -87,6 +89,13 @@ class LibraryIndex {
         pages[fileId] = pageTexts
         pageTexts.forEach { bm25.put("$fileId#${it.page}", it.text) }
         files[fileId] = f.copy(status = IndexStatus.INDEXED, pageCount = pageTexts.size, error = null)
+    }
+
+    /** Ajoute une page fournie par l'utilisateur (photo/capture) avec sa référence exacte. */
+    fun addUserPage(id: String, reference: ComicReference, text: String) {
+        removePages(id)
+        files[id] = IndexedFile(id, reference.display(), "user:" + text.hashCode(), IndexStatus.PENDING, reference = reference, userVerified = true)
+        complete(id, listOf(PageText(reference.page ?: 1, text, null)))
     }
 
     fun fail(fileId: String, error: String) { files[fileId]?.let { files[fileId] = it.copy(status = IndexStatus.FAILED, error = error) } }
