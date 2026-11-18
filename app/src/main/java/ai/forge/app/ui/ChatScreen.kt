@@ -122,6 +122,8 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
         } else micPermission.launch(Manifest.permission.RECORD_AUDIO)
     }
 
+    val prefill by container.prefill.collectAsState()
+    LaunchedEffect(prefill) { prefill?.let { input = it; container.prefill.value = null } }
     val voiceRequested by container.voiceRequested.collectAsState()
     LaunchedEffect(voiceRequested) {
         if (voiceRequested) { container.voiceRequested.value = false; if (!voiceOn) toggleVoice() }
@@ -150,7 +152,11 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
                     is OrchestratorEvent.ActionResult -> if (e.outcome.status == ActionOutcome.Status.NEEDS_CONFIRMATION)
                         lines[idx] = lines[idx].copy(pendingAction = e.call)
                     is OrchestratorEvent.SecurityWarning -> lines += ChatLine("Sécurité", "Contenu externe suspect ignoré comme instruction (${e.source}).")
-                    is OrchestratorEvent.ScriptReady -> lastScript = e.script
+                    is OrchestratorEvent.ScriptReady -> {
+                        lastScript = e.script
+                        val score = "${e.checks.count { it.ok }}/${e.checks.size}"
+                        container.scope.launch { container.scripts.save(text, e.script, score) }
+                    }
                     is OrchestratorEvent.Planned -> lines[idx] = lines[idx].copy(specialist = e.intent.primary.name.lowercase())
                     is OrchestratorEvent.Token -> {
                         buf.append(e.text)

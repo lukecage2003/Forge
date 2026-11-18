@@ -47,6 +47,21 @@ object DocumentExporter {
         uri
     }
 
+    /** Fichier quelconque (sous-titres SRT…) dans Téléchargements/Forge. */
+    suspend fun exportRaw(context: Context, fileName: String, mime: String, bytes: ByteArray): Uri = withContext(Dispatchers.IO) {
+        val values = ContentValues().apply {
+            put(MediaStore.Downloads.DISPLAY_NAME, fileName); put(MediaStore.Downloads.MIME_TYPE, mime)
+            put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Forge")
+        }
+        val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)!!
+        context.contentResolver.openOutputStream(uri)!!.use { it.write(bytes) }
+        uri
+    }
+
+    fun share(context: Context, uri: Uri, mime: String) = context.startActivity(Intent.createChooser(
+        Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Partager")
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+
     fun open(context: Context, uri: Uri, format: DocFormat) {
         val view = Intent(Intent.ACTION_VIEW).setDataAndType(uri, format.mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         val share = Intent(Intent.ACTION_SEND).setType(format.mime).putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)

@@ -35,10 +35,10 @@ data class ChatLine(val author: String, val text: String, val meta: String? = nu
 private data class Tab(val id: String, val icon: ImageVector, val label: String)
 private val tabs = listOf(
     Tab("chat", Icons.Default.AutoAwesome, "Forge"),
-    Tab("memory", Icons.Default.Psychology, "Mémoire"),
+    Tab("studio", Icons.Default.Movie, "Studio"),
+    Tab("academy", Icons.Default.School, "Études"),
     Tab("library", Icons.AutoMirrored.Filled.MenuBook, "Comics"),
-    Tab("actions", Icons.Default.Bolt, "Actions"),
-    Tab("settings", Icons.Default.Tune, "Réglages"),
+    Tab("more", Icons.Default.GridView, "Plus"),
 )
 
 /** Hauteur réservée à la barre d'onglets flottante (les écrans s'arrêtent au-dessus). */
@@ -51,12 +51,13 @@ fun ForgeApp(container: AppContainer) {
             var screen by rememberSaveable { mutableStateOf("chat") }
             AnimatedContent(screen, transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(160)) }, label = "screen") { s ->
                 Box(Modifier.fillMaxSize().statusBarsPadding()) {
+                    val ask: (String) -> Unit = { text -> container.prefill.value = text; screen = "chat" }
                     when (s) {
-                        "chat" -> ChatScreen(container, onSettings = { screen = "settings" })
-                        "actions" -> ActionCenterScreen(container)
-                        "memory" -> MemoryScreen(container)
+                        "chat" -> ChatScreen(container, onSettings = { screen = "more" })
+                        "studio" -> StudioScreen(container, ask)
+                        "academy" -> AcademyScreen(container, ask)
                         "library" -> LibraryScreen(container)
-                        else -> SettingsScreen(container)
+                        else -> MoreScreen(container)
                     }
                 }
             }

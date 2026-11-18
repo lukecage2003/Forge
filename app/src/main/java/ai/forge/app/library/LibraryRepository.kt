@@ -64,6 +64,11 @@ class LibraryRepository(private val dir: File, private val ocr: OcrEngine) {
         text
     }
 
+    /** Page de cours importée : citable avec titre et numéro de page. */
+    suspend fun addCoursePage(courseId: String, title: String, page: Int, text: String) = lock.withLock {
+        index.addUserPage("$courseId#p$page", ai.forge.comics.ComicReference(title, page = page), text); save()
+    }
+
     suspend fun forget(fileId: String) = lock.withLock { index.forget(fileId); save() }
 
     fun summary(): String {

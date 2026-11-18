@@ -170,7 +170,7 @@ class Orchestrator(
         }
 
         // 3 ter. Bibliothèque personnelle (comics, documents) : passages localisés, jamais inventés.
-        if (intent.primary == SpecialistId.COMICS || intent.primary == SpecialistId.DOCUMENT) {
+        if (intent.primary == SpecialistId.COMICS || intent.primary == SpecialistId.DOCUMENT || intent.primary == SpecialistId.STUDY) {
             val lib = libraryTool
             val passages = lib?.let { runCatching { it.search(input) }.getOrDefault(emptyList()) }.orEmpty()
             if (lib != null) emit(OrchestratorEvent.LibraryResults(passages))

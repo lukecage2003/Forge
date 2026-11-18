@@ -62,4 +62,12 @@ class ViralScriptTest {
         assertTrue(p.contains("relance toutes les ~90s")); assertTrue(p.contains("+40 %")); assertTrue(p.contains("aucune image, musique ou extrait protégé"))
         assertTrue(ScriptStudio.prompt("Venom", Platform.TIKTOK).contains("Fin qui relance la boucle") || ScriptStudio.prompt("Venom", Platform.TIKTOK).contains("relance la boucle"))
     }
+
+    @Test fun serializesAndExportsMarkdown() {
+        val s = ScriptStudio.parse(good, Platform.TIKTOK)
+        val json = kotlinx.serialization.json.Json.encodeToString(ViralScript.serializer(), s)
+        assertEquals(s, kotlinx.serialization.json.Json.decodeFromString(ViralScript.serializer(), json))
+        val md = ScriptStudio.toMarkdown(s)
+        assertTrue(md.contains("| 0:00 | gros plan masque | UNE FAILLE ? |")); assertTrue(md.contains("## Accroches à tester"))
+    }
 }

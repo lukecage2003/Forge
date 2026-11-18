@@ -1,6 +1,7 @@
 package ai.forge.editorial
 
 import ai.forge.core.text.TextUtils
+import kotlinx.serialization.Serializable
 
 /** Plateformes cibles avec leurs règles de rétention (configurables). */
 enum class Platform(
@@ -42,8 +43,10 @@ enum class HookType(val label: String, val pattern: String) {
     CHALLENGE("Défi / classement", "« Le personnage le plus sous-estimé de Marvel, et ce n'est pas celui que vous croyez. »"),
 }
 
+@Serializable
 data class ScriptBeat(val timecode: String?, val seconds: Int?, val visual: String?, val onScreenText: String?, val narration: String)
 
+@Serializable
 data class ViralScript(
     val platform: Platform,
     val titles: List<String>,
@@ -170,6 +173,18 @@ object ScriptStudio {
     }
 
     /** Conversion vers le modèle éditorial (storyboard, SRT, Motion Studio). */
+    /** Version Markdown du script (export PDF / Word / partage). */
+    fun toMarkdown(s: ViralScript): String = buildString {
+        appendLine("## Format"); appendLine("${s.platform.label} · ~${s.estimatedSeconds} s · ${s.words} mots"); appendLine()
+        if (s.titles.isNotEmpty()) { appendLine("## Titres"); s.titles.forEachIndexed { i, t -> appendLine("${i + 1}. $t") }; appendLine() }
+        s.thumbnail?.let { appendLine("## Miniature"); appendLine(it); appendLine() }
+        if (s.hooks.isNotEmpty()) { appendLine("## Accroches à tester"); s.hooks.forEach { appendLine("- $it") }; appendLine() }
+        appendLine("## Script")
+        appendLine("| Temps | Plan | Texte à l'écran | Narration |"); appendLine("|---|---|---|---|")
+        s.beats.forEach { b -> appendLine("| ${b.timecode ?: ""} | ${b.visual.orEmpty()} | ${b.onScreenText.orEmpty()} | ${b.narration.replace("|", "/")} |") }
+        if (s.sources.isNotEmpty()) { appendLine(); appendLine("## Sources"); s.sources.forEach { appendLine("- $it") } }
+    }
+
     fun toDocument(s: ViralScript, topic: String): ScriptDocument {
         val format = if (s.platform.vertical) FormatSpec.short(s.estimatedSeconds.coerceAtLeast(15), s.platform.wordsPerMinute)
             else FormatSpec.youtubeLong(maxOf(1, s.estimatedSeconds / 60), s.platform.wordsPerMinute)

@@ -85,6 +85,7 @@ class AppContainer(val app: Application) {
     /** Historique des conversations et stockage des scripts/cours. */
     val history = ai.forge.app.history.ConversationStore(db.conversations())
     val kv = db.kv()
+    val scripts = ai.forge.app.studio.ScriptRepository(kv)
 
     val gate = PermissionGate(settings.autonomyCeiling)
     val tools = ToolRegistry(listOf(SetAlarmTool(app), CalendarDraftTool(app), ShareTextTool(app), OpenAppTool(app)))
@@ -94,6 +95,8 @@ class AppContainer(val app: Application) {
     val networkAvailable = MutableStateFlow(true)
     /** Ouverture par le bouton latéral / l'assistant : l'écran de conversation démarre l'écoute. */
     val voiceRequested = MutableStateFlow(false)
+    /** Texte proposé dans la barre de saisie depuis un autre écran (Studio, Études…). */
+    val prefill = MutableStateFlow<String?>(null)
 
     /** Arrêt d'urgence global : voix ET actions. */
     fun emergencyStop() { voice.stop(); actions.engageKillSwitch() }
@@ -103,6 +106,8 @@ class AppContainer(val app: Application) {
     /** OCR partagé (bibliothèque, images jointes, cours). */
     val ocr = MlKitOcrEngine()
     val library = LibraryRepository(java.io.File(app.filesDir, "library"), ocr)
+
+    val academy = ai.forge.app.academy.AcademyRepository(kv, ocr, library)
 
     private val actionExecutor = ToolCallExecutor { call, confirmed ->
         if (confirmed) actions.confirm(call)
