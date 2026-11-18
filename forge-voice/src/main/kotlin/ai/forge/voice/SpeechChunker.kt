@@ -5,8 +5,15 @@ package ai.forge.voice
  * commence dès la première phrase complète (réponse progressive en streaming, §2.2).
  * Nettoie aussi les artefacts écrits (Markdown, URL) qui n'ont pas de sens à l'oral.
  */
-class SpeechChunker(private val minChars: Int = 60, private val maxChars: Int = 320) {
+class SpeechChunker(
+    private val minChars: Int = 60,
+    private val maxChars: Int = 320,
+    /** Premier segment : prononcé dès une courte phrase (ou une virgule) pour que la voix parte vite. */
+    private val firstMinChars: Int = 8,
+    private val firstSoftCut: Int = 48,
+) {
     private val buffer = StringBuilder()
+    private var first = true
 
     /** Ajoute des jetons et renvoie les segments prêts à être prononcés. */
     fun push(tokens: String): List<String> {
@@ -16,7 +23,7 @@ class SpeechChunker(private val minChars: Int = 60, private val maxChars: Int = 
             val cut = findCut() ?: break
             val seg = clean(buffer.substring(0, cut))
             buffer.delete(0, cut)
-            if (seg.isNotBlank()) out += seg
+            if (seg.isNotBlank()) { out += seg; first = false }
         }
         return out
     }
@@ -24,21 +31,23 @@ class SpeechChunker(private val minChars: Int = 60, private val maxChars: Int = 
     /** Vide le reliquat en fin de génération. */
     fun flush(): String? = clean(buffer.toString()).also { buffer.clear() }.takeIf { it.isNotBlank() }
 
-    fun reset() = buffer.clear()
+    fun reset() { buffer.clear(); first = true }
 
     private fun findCut(): Int? {
         val s = buffer
+        val min = if (first) firstMinChars else minChars
+        val soft = if (first) firstSoftCut else maxChars
         var i = 0
         while (i < s.length) {
             val c = s[i]
             val strong = c == '.' || c == '!' || c == '?' || c == '…' || c == '\n'
-            if (strong && i + 1 >= minChars && i + 1 < s.length && (s[i + 1].isWhitespace())) {
+            if (strong && i + 1 >= min && i + 1 < s.length && (s[i + 1].isWhitespace())) {
                 // Évite de couper après une abréviation ou un nombre décimal.
                 val prevWord = s.substring(0, i).takeLastWhile { it.isLetterOrDigit() }
                 if (c == '.' && prevWord in ABBREVIATIONS) { i++; continue }
                 return i + 1
             }
-            if (i + 1 >= maxChars && (c == ',' || c == ';' || c == ':') && i + 1 < s.length) return i + 1
+            if (i + 1 >= soft && (c == ',' || c == ';' || c == ':') && i + 1 < s.length && s[i + 1].isWhitespace()) return i + 1
             i++
         }
         return null

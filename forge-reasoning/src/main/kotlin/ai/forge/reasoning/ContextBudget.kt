@@ -24,4 +24,18 @@ object ContextBudget {
         }
         return out.toList()
     }
+
+    /**
+     * Comme [fit], mais le début de la fenêtre n'avance que par blocs de [step] messages : le
+     * début de conversation gardé reste identique plusieurs tours de suite, ce qui permet au
+     * moteur local de réutiliser ce qu'il a déjà lu au lieu de tout relire à chaque question.
+     */
+    fun fitStable(turns: List<ChatMessage>, budget: Int, step: Int = 6): List<ChatMessage> {
+        if (turns.isEmpty()) return turns
+        val minimal = fit(turns, budget)
+        val dropped = turns.size - minimal.size
+        if (dropped == 0) return turns
+        val start = ((dropped + step - 1) / step) * step
+        return if (start >= turns.size - 1) minimal else turns.subList(start, turns.size).let { if (it.size < minimal.size) it else minimal }
+    }
 }

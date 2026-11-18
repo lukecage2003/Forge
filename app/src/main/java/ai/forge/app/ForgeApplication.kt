@@ -71,8 +71,11 @@ class ForgeApplication : Application(), androidx.work.Configuration.Provider {
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
-        // Application en arrière-plan ou système sous pression : le modèle local (plusieurs Go) est libéré.
-        if (level >= TRIM_MEMORY_BACKGROUND) container.onLowMemory()
+        // Le modèle reste chargé en arrière-plan (sinon chaque question après un passage par une autre
+        // application rechargeait plusieurs Go : plusieurs secondes perdues). Il n'est libéré que si
+        // Android est à court de mémoire et qu'aucune conversation vocale n'est en cours.
+        @Suppress("DEPRECATION")
+        if (level >= TRIM_MEMORY_COMPLETE && container.voice.state.value == ai.forge.voice.VoiceState.IDLE) container.onLowMemory()
     }
 }
 
@@ -179,6 +182,7 @@ class AppContainer(val app: Application) {
     /** Charge le modèle en arrière-plan pour que la première réponse soit immédiate. */
     fun warmUpLocalModel() {
         val p = localModel() as? LiteRtLmProvider ?: return
+        if (p.isLoaded) return
         scope.launch(kotlinx.coroutines.Dispatchers.IO) {
             brainDetail.value = "Préparation du modèle…"
             brainDetail.value = p.warmUp().fold({ "Prêt · $it" }, { "Échec du chargement : ${it.message}" })

@@ -304,12 +304,18 @@ class Orchestrator(
         // Instructions stables dans le message système (réutilisables d'un tour à l'autre par le moteur
         // local, qui n'a alors plus à relire toute la conversation) ; le contexte propre à la question
         // (souvenirs, sources, consignes de tâche) est joint à la question elle-même.
-        val system = ForgePersona.systemPrompt(voice, "Spécialiste actif : ${spec.name}. ${spec.mission}\n${spec.instructions}") +
-            (securityRule?.let { "\n\n$it" } ?: "")
-        val dynamic = listOfNotNull(memoryContext.ifBlank { null }?.let { "Éléments de mémoire pertinents (à utiliser avec discernement, sans les réciter) :\n$it" }, imageFallback, extra)
+        // Message système IDENTIQUE pour toutes les questions (texte ou voix, quel que soit le
+        // spécialiste) : le moteur local garde alors la conversation déjà lue en mémoire et ne
+        // traite que la nouvelle question. Tout ce qui varie est joint à la question.
+        val system = ForgePersona.stableSystemPrompt() + "\n\n" + UntrustedContent.SYSTEM_RULE
+        val dynamic = listOfNotNull(
+            ForgePersona.style(voice),
+            "Spécialiste actif : ${spec.name}. ${spec.mission}\n${spec.instructions}",
+            memoryContext.ifBlank { null }?.let { "Éléments de mémoire pertinents (à utiliser avec discernement, sans les réciter) :\n$it" },
+            imageFallback, extra)
             .joinToString("\n\n")
         val maxOut = if (voice) 600 else minOf(3_000, budgetTokens / 3)
-        val turns = ContextBudget.fit(ctx.turns, budgetTokens - maxOut - ContextBudget.estimate(system) - ContextBudget.estimate(dynamic))
+        val turns = ContextBudget.fitStable(ctx.turns, budgetTokens - maxOut - ContextBudget.estimate(system) - ContextBudget.estimate(dynamic))
         val withContext = if (dynamic.isBlank() || turns.isEmpty() || turns.last().role != Role.USER) turns
             else turns.dropLast(1) + turns.last().copy(content = "[Contexte pour cette question — ne le cite pas tel quel]\n$dynamic\n\n[Question]\n${turns.last().content}")
         return ChatRequest(listOf(ChatMessage(Role.SYSTEM, system)) + withContext, temperature = spec.temperature, maxTokens = maxOut, images = attachedImages)

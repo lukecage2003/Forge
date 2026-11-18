@@ -51,6 +51,8 @@ class LiteRtLmProvider(
 
     override suspend fun isAvailable(): Boolean = File(modelPath).canRead()
 
+    val isLoaded: Boolean get() = engine != null
+
     suspend fun warmUp(): Result<String> = runCatching { engine(); activeBackend.value ?: "?" }
 
     private suspend fun engine(): Engine = lock.withLock {
@@ -87,6 +89,13 @@ class LiteRtLmProvider(
     private fun shapeOf(turns: List<ai.forge.core.model.ChatMessage>) =
         turns.map { it.role to if (it.role == Role.ASSISTANT) it.content.trim() else "" }
 
+    /**
+     * L'historique est « le même » si les rôles concordent et si chaque réponse gardée commence
+     * par ce que le moteur a réellement généré (Forge y ajoute parfois les sources ou un contrôle).
+     */
+    private fun sameHistory(kept: List<Pair<Role, String>>, now: List<Pair<Role, String>>): Boolean =
+        kept.size == now.size && kept.zip(now).all { (a, b) -> a.first == b.first && b.second.startsWith(a.second) }
+
     override fun stream(request: ChatRequest): Flow<LlmEvent> = flow {
         val e = try { engine() } catch (t: Throwable) {
             emit(LlmEvent.Failure("Impossible de charger le modèle local : ${t.message}", t)); return@flow
@@ -95,7 +104,7 @@ class LiteRtLmProvider(
         val turns = request.messages.filter { it.role != Role.SYSTEM }
         val last = turns.lastOrNull { it.role == Role.USER } ?: run { emit(LlmEvent.Done("vide")); return@flow }
         val history = turns.dropLast(1)
-        val reusable = live?.takeIf { it.system == system && it.shape == shapeOf(history) && it.conversation.isAlive }
+        val reusable = live?.takeIf { it.system == system && sameHistory(it.shape, shapeOf(history)) && it.conversation.isAlive }
         val conversation = reusable?.conversation ?: run {
             live?.let { runCatching { it.conversation.close() } }; live = null
             e.createConversation(ConversationConfig(

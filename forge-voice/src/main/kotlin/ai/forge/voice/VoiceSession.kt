@@ -1,5 +1,7 @@
 package ai.forge.voice
 
+import kotlinx.coroutines.flow.buffer
+
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
@@ -103,7 +105,9 @@ class VoiceSessionController(
         spoken.clear()
         responseJob = scope.launch {
             val chunker = SpeechChunker()
-            source.respond(utterance).collect { tokens ->
+            // Tampon illimité : le modèle continue d'écrire pendant que Forge parle (la voix ne
+            // freine plus la génération).
+            source.respond(utterance).buffer(kotlinx.coroutines.channels.Channel.UNLIMITED).collect { tokens ->
                 for (seg in chunker.push(tokens)) speakSegment(seg)
             }
             chunker.flush()?.let { speakSegment(it) }

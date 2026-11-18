@@ -41,6 +41,19 @@ object ForgePersona {
         La profondeur ne se mesure pas au nombre de mots.
     """.trimIndent()
 
+    /** Instructions fixes (jamais modifiées d'une question à l'autre : réutilisables par le moteur). */
+    fun stableSystemPrompt(): String = CORE_IDENTITY + "\n\n" + CONCISION
+
+    /** Style propre au canal, joint à chaque question. */
+    fun style(voice: Boolean): String = if (voice) VOICE_STYLE else WRITTEN_STYLE
+
+    /** Réponse rapide : l'essentiel d'abord (chaque mot généré coûte du temps sur le téléphone). */
+    val CONCISION = """
+        Commence par la réponse elle-même dès la première phrase, sans préambule ni reformulation
+        de la question. Sois bref par défaut ; développe seulement si la demande l'exige
+        (plan, script, document, analyse demandée) ou si l'utilisateur le demande.
+    """.trimIndent()
+
     fun systemPrompt(voice: Boolean, specialistInstructions: String? = null, memoryContext: String? = null): String =
         buildString {
             appendLine(CORE_IDENTITY)

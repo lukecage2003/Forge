@@ -50,6 +50,8 @@ class VoiceSessionService : LifecycleService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
+        // Le cerveau est chargé dès la veille : au mot « Forge », il est déjà prêt.
+        if (intent?.action != ACTION_STOP) container.warmUpLocalModel()
         when (intent?.action) {
             ACTION_STOP -> { shutdown(); return START_NOT_STICKY }
             ACTION_STANDBY -> {

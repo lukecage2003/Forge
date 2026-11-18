@@ -284,3 +284,27 @@ class VisionTest {
         assertTrue(all.contains("ne voit pas les images")); assertTrue(all.contains("WAKANDA FOREVER"))
     }
 }
+
+class LatencyTest {
+    @Test fun systemMessageIsIdenticalAcrossSpecialistsAndChannels() = runTest {
+        val p = ScriptedProvider(capabilities = ProviderCapabilities(Locality.ON_DEVICE, 8_192, reasoningQuality = 4)) { "Ok." }
+        val o = Orchestrator(ProviderRouter(listOf(p)), MemoryManager(InMemoryMemoryStore(), HashingEmbedder()))
+        val ctx = ConversationContext("lat")
+        o.handle("Salut, ça va ?", ctx, voice = true).toList()
+        o.handle("Dans quel comic Black Panther absorbe l'énergie ?", ctx, voice = false).toList()
+        o.handle("Écris-moi un plan pour ma semaine", ctx, voice = false).toList()
+        val systems = p.requests.map { r -> r.messages.first { it.role == ai.forge.core.model.Role.SYSTEM }.content }.distinct()
+        assertEquals(1, systems.size)                       // le moteur local peut réutiliser ce qu'il a lu
+    }
+
+    @Test fun contextWindowStartMovesInBlocks() {
+        val turns = (1..40).map { ai.forge.core.model.ChatMessage(if (it % 2 == 1) ai.forge.core.model.Role.USER else ai.forge.core.model.Role.ASSISTANT, "x".repeat(320)) }
+        val a = ContextBudget.fitStable(turns.take(30), budget = 2_000)
+        val b = ContextBudget.fitStable(turns.take(32), budget = 2_000)
+        assertTrue(a.size <= 30 && ContextBudget.fit(turns.take(30), 2_000).size >= a.size)
+        // Début de fenêtre identique d'un tour à l'autre (ou avancé d'un bloc entier).
+        val startA = 30 - a.size; val startB = 32 - b.size
+        assertEquals(0, startA % 6); assertEquals(0, startB % 6)
+        assertTrue(startA == startB || startB - startA == 6)
+    }
+}

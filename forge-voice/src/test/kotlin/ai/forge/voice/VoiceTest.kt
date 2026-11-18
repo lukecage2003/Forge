@@ -131,3 +131,13 @@ class VoiceTest {
         assertEquals("Et de Loki ?", asked.last())
     }
 }
+
+class FirstWordsTest {
+    @Test fun firstSentenceIsSpokenEarlyThenNormalChunks() {
+        val ch = SpeechChunker()
+        assertEquals(listOf("Bonne idée."), ch.push("Bonne idée. Le"))
+        assertEquals(emptyList(), ch.push(" reste est plus long."))       // ensuite, segments plus longs
+        val c2 = SpeechChunker()
+        assertEquals(1, c2.push("Le vibranium vient d'une météorite tombée au Wakanda, et ").size)   // coupe à la virgule
+    }
+}
