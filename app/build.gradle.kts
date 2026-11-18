@@ -15,16 +15,19 @@ android {
         // Galaxy S25 : Android 15 (One UI 7) et ultérieur. minSdk 31 conserve une marge raisonnable.
         minSdk = 31
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.4.0"
+        versionCode = 6
+        versionName = "0.5.0"
         // Galaxy S25 = arm64-v8a. Ajouter « x86_64 » pour un émulateur de développement.
         ndk { abiFilters += listOf("arm64-v8a") }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Version optimisée (non débogable : Compose y est bien plus fluide). R8 désactivé pour
+            // éviter tout risque avec les bibliothèques natives (LiteRT-LM, MediaPipe, ML Kit).
+            isMinifyEnabled = false
+            isDebuggable = false
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {

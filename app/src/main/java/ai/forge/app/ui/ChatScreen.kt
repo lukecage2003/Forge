@@ -118,6 +118,7 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
         scope.launch {
             listState.animateScrollToItem(lines.lastIndex)
             val buf = StringBuilder()
+            var lastPaint = 0L
             container.orchestrator.handle(text, container.conversation, voice = false).collect { e ->
                 when (e) {
                     is OrchestratorEvent.ResearchDone -> lines[idx] = lines[idx].copy(meta = "${e.sourceCount} source(s) consultée(s)")
@@ -127,9 +128,14 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
                     is OrchestratorEvent.SecurityWarning -> lines += ChatLine("Sécurité", "Contenu externe suspect ignoré comme instruction (${e.source}).")
                     is OrchestratorEvent.ScriptReady -> lastScript = e.script
                     is OrchestratorEvent.Planned -> lines[idx] = lines[idx].copy(specialist = e.intent.primary.name.lowercase())
-                    is OrchestratorEvent.Token -> { buf.append(e.text); lines[idx] = lines[idx].copy(text = buf.toString()) }
+                    is OrchestratorEvent.Token -> {
+                        buf.append(e.text)
+                        val now = System.currentTimeMillis()
+                        if (now - lastPaint > 50) { lines[idx] = lines[idx].copy(text = buf.toString()); lastPaint = now }
+                    }
+                    is OrchestratorEvent.Completed -> lines[idx] = lines[idx].copy(text = e.fullText)
                     is OrchestratorEvent.MemoryEvent -> lines += ChatLine("Mémoire", memoryLabel(e))
-                    is OrchestratorEvent.Failed -> { lines[idx] = lines[idx].copy(text = e.reason, meta = "Erreur"); container.voice.signal(PresenceSignal.Failure(e.reason)) }
+                    is OrchestratorEvent.Failed -> { lines[idx] = lines[idx].copy(text = friendlyError(e.reason), meta = "Erreur"); container.voice.signal(PresenceSignal.Failure(e.reason)) }
                     else -> Unit
                 }
             }
@@ -138,7 +144,7 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
     }
 
     // Défilement automatique pendant la génération.
-    LaunchedEffect(lines.lastOrNull()?.text?.length) { if (lines.isNotEmpty() && busy) listState.scrollToItem(lines.lastIndex, Int.MAX_VALUE / 2) }
+    LaunchedEffect(lines.lastOrNull()?.text?.length?.div(80), lines.size) { if (lines.isNotEmpty()) listState.scrollToItem(lines.lastIndex, Int.MAX_VALUE / 2) }
 
     val orbState = when { voiceOn -> presence; busy -> PresenceState.THINKING; brain is AppContainer.BrainState.Error -> PresenceState.ERROR; else -> PresenceState.STANDBY }
 
@@ -336,4 +342,14 @@ private fun FeedbackDialog(onSend: (ai.forge.evaluation.FeedbackKind, String) ->
         confirmButton = { GoldButton("Envoyer") { onSend(kind, comment) } },
         dismissButton = { androidx.compose.material3.TextButton(onClick = onCancel) { Text("Annuler", color = ForgePalette.TextMuted) } },
     )
+}
+
+/** Erreurs compréhensibles : jamais de trace technique brute à l'écran. */
+private fun friendlyError(reason: String): String = when {
+    reason.startsWith("Aucun moteur") -> reason
+    Regex("HTTP 401|HTTP 403|invalid.*key|api key", RegexOption.IGNORE_CASE).containsMatchIn(reason) -> "La clé d'API semble invalide ou expirée. Vérifiez-la dans Réglages."
+    Regex("HTTP 429|quota|rate", RegexOption.IGNORE_CASE).containsMatchIn(reason) -> "Le service en ligne limite les requêtes pour le moment. Réessayez dans un instant."
+    Regex("réseau|network|timeout|Unable to resolve|failed to connect", RegexOption.IGNORE_CASE).containsMatchIn(reason) -> "Connexion impossible. Vérifiez Internet, ou utilisez le cerveau installé sur le téléphone."
+    reason.contains("charger le modèle local") || reason.contains("Modèle local") -> "Le modèle local n'a pas pu démarrer. Fermez quelques applications puis réessayez ; si cela persiste, essayez Gemma 4 E2B dans Réglages."
+    else -> "Je n'ai pas pu répondre (${reason.take(120)})."
 }

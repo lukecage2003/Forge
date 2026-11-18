@@ -1,5 +1,22 @@
 # Historique des versions
 
+## 0.5.0 — 18/11/2026
+- **Recherche Internet sans réglage** : Wikipédia + wikis Marvel/DC (API publiques), automatique pour
+  les questions comics, éditoriales et de recherche ; SearXNG/Brave restent possibles.
+- **Studio de scripts** TikTok / Shorts / Reels / YouTube : accroches, plans minutés, texte à l'écran,
+  titres, miniature, contrôle de rétention automatique et révision si l'accroche ou l'intro échoue.
+- **Analyse du marché YouTube** (API officielle, clé gratuite) : vidéos qui surperforment, formats,
+  titres gagnants, injectés dans les scripts ; « analyse le marché sur X ».
+- **Mode débat comics** : chaque argument cite une preuve ; audit « non sourcé / wiki / vérifié ».
+  Pages de comics fournies en photo + référence = preuves vérifiées.
+- **Amélioration continue** : 👍/👎 + consigne → leçon appliquée aux réponses suivantes.
+- **Voix réparée** : plus d'écoute de sa propre voix, plus de doublons, erreurs bénignes silencieuses,
+  bascule automatique du moteur, mot d'appel « Forge », vocabulaire comics corrigé et appris.
+- **Animations originales** exportées en MP4 depuis un script.
+- **Personnalité** : stratège calme et franc, verdicts « bonne / mauvaise / à retravailler » motivés.
+- **Fluidité** : version optimisée (non débogable), affichage du texte regroupé, verre figé dans les
+  listes, erreurs lisibles.
+
 ## 0.4.0 — 18/11/2026
 - **Cerveau plus puissant** : Gemma 4 E4B (recommandé) et E2B (rapide), Google, Apache 2.0, sans compte,
   exécutés par LiteRT-LM sur le GPU du S25, repli CPU automatique, préchargement au démarrage,

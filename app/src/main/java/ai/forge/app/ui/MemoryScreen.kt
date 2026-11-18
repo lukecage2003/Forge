@@ -46,7 +46,7 @@ fun MemoryScreen(container: AppContainer) {
             Modifier.padding(20.dp), style = MaterialTheme.typography.bodyMedium, color = ForgePalette.TextMuted)
         LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = TabBarSpace + 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(items, key = { it.id }) { m ->
-                GlassSurface(Modifier.fillMaxWidth(), shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)) {
+                GlassSurface(Modifier.fillMaxWidth(), shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp), live = false) {
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(m.text, style = MaterialTheme.typography.bodyLarge, color = ForgePalette.Text)

@@ -16,7 +16,13 @@
   sans mémoire ni document lui sont envoyées ; élargir dans Réglages si vous le souhaitez.
 - « Tester les connexions » vérifie réellement chaque moteur.
 
-## Recherche Web (facultatif)
+## Analyse YouTube (facultatif, gratuit)
+Google Cloud Console → nouveau projet → « API et services » → activer **YouTube Data API v3** →
+Identifiants → **Clé API**. La coller dans Réglages → Analyse YouTube. Quota gratuit : 10 000
+unités/jour (une analyse ≈ 102). TikTok n'offre pas d'API publique de tendances : non disponible.
+
+## Recherche Web
+Active par défaut, sans réglage (Wikipédia + wikis Marvel/DC). Pour des résultats plus larges :
 - **SearXNG** (recommandé, peut tourner chez vous : `docker run -p 8080:8080 searxng/searxng`,
   format JSON activé dans `settings.yml`), URL à saisir dans Réglages.
 - Ou une clé **Brave Search API**.

@@ -34,7 +34,7 @@ fun ActionCenterScreen(container: AppContainer) {
         }
         LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = TabBarSpace + 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(log.reversed()) { e ->
-                GlassSurface(Modifier.fillMaxWidth(), shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)) {
+                GlassSurface(Modifier.fillMaxWidth(), shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp), live = false) {
                     Column(Modifier.padding(14.dp)) {
                         Text("${e.tool} — ${statusLabel(e.status)}", color = if (e.status == ActionStatus.SUCCEEDED) ForgePalette.Gold else ForgePalette.Text)
                         Text(e.outcome, style = MaterialTheme.typography.bodySmall)

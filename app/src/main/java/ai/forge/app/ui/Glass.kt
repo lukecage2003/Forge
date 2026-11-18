@@ -94,6 +94,8 @@ fun GlassSurface(
     blur: Dp = 32.dp,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     onClick: (() -> Unit)? = null,
+    /** false = fond figé (pas redessiné à chaque image) : à utiliser dans les listes, bien plus léger. */
+    live: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val aurora = LocalAurora.current
@@ -106,7 +108,7 @@ fun GlassSurface(
     ) {
         if (aurora != null) {
             Canvas(Modifier.matchParentSize().blur(blur, BlurredEdgeTreatment.Rectangle)) {
-                translate(-origin.x, -origin.y) { drawAurora(aurora.rootSize, aurora.phase.value) }
+                translate(-origin.x, -origin.y) { drawAurora(aurora.rootSize, if (live) aurora.phase.value else 0f) }
             }
         }
         Box(Modifier.matchParentSize().background(tint))
