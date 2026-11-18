@@ -154,7 +154,7 @@ fun SettingsScreen(container: AppContainer) {
             Section("Voix") {
                 VoicePicker(container, s.voiceName, s.networkVoices, onPick = { s = s.copy(voiceName = it) }, onNetwork = { s = s.copy(networkVoices = it) })
                 Text("Vitesse de parole : ${"%.2f".format(s.speechRate)}", color = ForgePalette.Text)
-                Slider(s.speechRate, { s = s.copy(speechRate = it) }, valueRange = 0.6f..1.6f,
+                Slider(s.speechRate, { s = s.copy(speechRate = it) }, valueRange = 0.9f..2.0f,
                     colors = SliderDefaults.colors(thumbColor = ForgePalette.Gold, activeTrackColor = ForgePalette.Gold))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Afficher la transcription", Modifier.weight(1f), color = ForgePalette.Text)

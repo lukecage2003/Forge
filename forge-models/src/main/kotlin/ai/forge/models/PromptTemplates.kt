@@ -70,7 +70,7 @@ data class DownloadableModel(
             url = "$HF/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it-gpu.litertlm",
             fileName = "gemma-4-E4B-it-gpu.litertlm", sizeBytes = 3_310_938_740,
             sha256 = "ea168f5a601b543e02712f9381f26b06ddc7d4cbe2406410387c82d69b995a60",
-            license = "Apache 2.0", ramMb = 4_200, quality = 4, contextTokens = 4_096,
+            license = "Apache 2.0", ramMb = 4_600, quality = 4, contextTokens = 8_192,
         )
 
         /** Gemma 4 E2B, version GPU : plus léger et plus rapide. */
@@ -79,7 +79,7 @@ data class DownloadableModel(
             url = "$HF/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it-gpu.litertlm",
             fileName = "gemma-4-E2B-it-gpu.litertlm", sizeBytes = 2_340_870_772,
             sha256 = "d3cfec6ae2e027a994e51366d44dbf522ec7531a4a35fbbfcd3e9cc9b927afc1",
-            license = "Apache 2.0", ramMb = 3_000, quality = 3, contextTokens = 4_096,
+            license = "Apache 2.0", ramMb = 3_300, quality = 3, contextTokens = 8_192,
         )
 
         /** Qwen 2.5 1,5B (MediaPipe) : très léger, gardé pour les appareils modestes. */

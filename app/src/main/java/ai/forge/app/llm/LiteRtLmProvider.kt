@@ -33,12 +33,15 @@ import java.io.File
 class LiteRtLmProvider(
     private val modelPath: String,
     private val cacheDir: String,
-    private val maxTokens: Int = 4_096,
+    private val maxTokens: Int = 8_192,
     quality: Int = 3,
     override val id: String = "local-litertlm",
     override val displayName: String = "Gemma (sur le téléphone)",
 ) : LlmProvider {
-    override val capabilities = ProviderCapabilities(Locality.ON_DEVICE, contextTokens = maxTokens, reasoningQuality = quality)
+    @Volatile private var contextTokens = maxTokens
+    private val quality0 = quality
+    /** Contexte réel après démarrage (8k si le GPU l'accepte, sinon 4k). */
+    override val capabilities get() = ProviderCapabilities(Locality.ON_DEVICE, contextTokens = contextTokens, reasoningQuality = quality0)
 
     /** Backend effectivement utilisé, pour l'affichage (« GPU » ou « CPU (repli) »). */
     val activeBackend = MutableStateFlow<String?>(null)
@@ -52,15 +55,20 @@ class LiteRtLmProvider(
     private suspend fun engine(): Engine = lock.withLock {
         engine?.let { return it }
         kotlinx.coroutines.withContext(Dispatchers.IO) {
-            val gpu = runCatching {
-                Engine(EngineConfig(modelPath, Backend.GPU(), maxNumTokens = maxTokens, cacheDir = cacheDir)).also { it.initialize() }
+            // Ordre d'essai : GPU grand contexte → GPU contexte standard → CPU. Le premier qui démarre gagne.
+            val attempts = listOf<Pair<() -> Backend, Int>>({ Backend.GPU() } to maxTokens, { Backend.GPU() } to 4_096,
+                { Backend.CPU() } to maxTokens, { Backend.CPU() } to 4_096).distinct()
+            var lastError: Throwable? = null
+            for ((backend, tokens) in attempts) {
+                val b = backend()
+                val e = runCatching { Engine(EngineConfig(modelPath, b, maxNumTokens = tokens, cacheDir = cacheDir)).also { it.initialize() } }
+                    .onFailure { lastError = it }.getOrNull() ?: continue
+                contextTokens = tokens
+                activeBackend.value = (if (b is Backend.GPU) "GPU" else "CPU") + " · contexte ${tokens / 1024}k"
+                engine = e
+                return@withContext e
             }
-            val e = gpu.getOrNull()?.also { activeBackend.value = "GPU" }
-                ?: Engine(EngineConfig(modelPath, Backend.CPU(), maxNumTokens = maxTokens, cacheDir = cacheDir)).also {
-                    it.initialize(); activeBackend.value = "CPU (repli : ${gpu.exceptionOrNull()?.message?.take(60)})"
-                }
-            engine = e
-            e
+            throw IllegalStateException("aucune configuration n'a démarré (${lastError?.message})", lastError)
         }
     }
 

@@ -15,8 +15,8 @@ android {
         // Galaxy S25 : Android 15 (One UI 7) et ultérieur. minSdk 31 conserve une marge raisonnable.
         minSdk = 31
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.5.0"
+        versionCode = 7
+        versionName = "0.6.0"
         // Galaxy S25 = arm64-v8a. Ajouter « x86_64 » pour un émulateur de développement.
         ndk { abiFilters += listOf("arm64-v8a") }
     }

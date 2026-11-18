@@ -114,6 +114,7 @@ class Orchestrator(
 
         val needs = RoutingNeeds(depth = intent.depth, task = taskOf(intent.primary), dataClass = dataClass)
         val provider = router.select(needs)
+        budgetTokens = provider?.capabilities?.contextTokens ?: budgetTokens
         if (provider == null) {
             emit(OrchestratorEvent.Failed("Aucun moteur disponible pour cette demande (${dataClass.label}). Détail : ${router.explain(needs)}"))
             return@flow
@@ -207,7 +208,11 @@ class Orchestrator(
         }
 
         emit(OrchestratorEvent.StepStarted(intent.primary))
-        val extra = listOfNotNull(researchNote, notes.takeIf { it.isNotEmpty() }?.let { "Notes internes des autres spécialistes :\n$it" })
+        val docRequest = ai.forge.writing.DocFormat.requested(input)?.let {
+            "L'utilisateur veut un document ${it.label} : rédige le document complet et soigné en Markdown (un titre « # », des sections « ## », " +
+                "des listes et des tableaux si utile), sans phrase d'introduction ni de conclusion du type « voici le document ». Le fichier sera créé automatiquement."
+        }
+        val extra = listOfNotNull(researchNote, docRequest, notes.takeIf { it.isNotEmpty() }?.let { "Notes internes des autres spécialistes :\n$it" })
             .joinToString("\n\n").ifEmpty { null }
         val sourcesFooter = bibliography?.let { if (voice) "" else "\n\nSources consultées :\n$it" }.orEmpty()
 
@@ -256,13 +261,15 @@ class Orchestrator(
         emit(OrchestratorEvent.Completed(finalWithSources))
     }
 
+    /** Fenêtre de contexte du moteur choisi (mise à jour à chaque requête). */
+    @Volatile private var budgetTokens: Int = 8_192
+
     private fun request(spec: SpecialistSpec, ctx: ConversationContext, voice: Boolean, memoryContext: String, extra: String?, securityRule: String? = null): ChatRequest {
-        val system = ForgePersona.systemPrompt(voice, "Spécialiste actif : ${spec.name}. ${spec.mission}\n${spec.instructions}", memoryContext)
-        val msgs = buildList {
-            add(ChatMessage(Role.SYSTEM, system + (securityRule?.let { "\n\n$it" } ?: "") + (extra?.let { "\n\n$it" } ?: "")))
-            addAll(ctx.turns)
-        }
-        return ChatRequest(msgs, temperature = spec.temperature, maxTokens = if (voice) 600 else 2_000)
+        val system = ForgePersona.systemPrompt(voice, "Spécialiste actif : ${spec.name}. ${spec.mission}\n${spec.instructions}", memoryContext) +
+            (securityRule?.let { "\n\n$it" } ?: "") + (extra?.let { "\n\n$it" } ?: "")
+        val maxOut = if (voice) 600 else minOf(3_000, budgetTokens / 3)
+        return ChatRequest(listOf(ChatMessage(Role.SYSTEM, system)) + ContextBudget.fit(ctx.turns, budgetTokens - maxOut - ContextBudget.estimate(system)),
+            temperature = spec.temperature, maxTokens = maxOut)
     }
 
     private suspend fun handleAction(input: String, intent: Intent, emit: suspend (OrchestratorEvent) -> Unit): String {

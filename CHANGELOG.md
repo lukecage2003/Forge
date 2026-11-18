@@ -1,5 +1,15 @@
 # Historique des versions
 
+## 0.6.0 — 18/11/2026
+- **Voix plus naturelle** : phrases enchaînées sans blanc (file continue), moteur Google prioritaire,
+  voix neuronales en ligne avec repli local hors-ligne, choix de la voix avec écoute d'essai,
+  texte dit débarrassé des émojis, symboles et étiquettes de sources.
+- **Création de fichiers** : PDF mis en page (titres, gras, listes, tableaux, pagination), Word (.docx),
+  Markdown, texte ; « fais-moi un PDF sur… » crée le fichier automatiquement (Téléchargements/Forge).
+- **Sans limite de conversation** : le contexte est ajusté automatiquement à la mémoire du modèle,
+  contexte local porté à 8 192 jetons quand le GPU l'accepte (repli 4 096), réponses plus longues,
+  bouton « Continuer » si une réponse est coupée.
+
 ## 0.5.0 — 18/11/2026
 - **Recherche Internet sans réglage** : Wikipédia + wikis Marvel/DC (API publiques), automatique pour
   les questions comics, éditoriales et de recherche ; SearXNG/Brave restent possibles.

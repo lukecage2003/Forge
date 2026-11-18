@@ -30,7 +30,7 @@ class AndroidTtsOutput(private val context: Context) : SpeechOutput {
     @Volatile var allowNetworkVoices: Boolean = true
     val activeVoice = MutableStateFlow<String?>(null)
 
-    var speechRate: Float = 1.0f
+    var speechRate: Float = 1.25f
         set(value) { field = value.coerceIn(0.5f, 2.0f); tts.setSpeechRate(field) }
     var pitch: Float = 1.0f
         set(value) { field = value.coerceIn(0.5f, 2.0f); tts.setPitch(field) }

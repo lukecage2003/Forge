@@ -81,6 +81,17 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
     var feedbackFor by remember { mutableStateOf<Int?>(null) }
     var lastScript by remember { mutableStateOf<ai.forge.editorial.ViralScript?>(null) }
     var motionStatus by remember { mutableStateOf<String?>(null) }
+    var exportFor by remember { mutableStateOf<Int?>(null) }
+    var exported by remember { mutableStateOf<Map<Int, Pair<android.net.Uri, ai.forge.writing.DocFormat>>>(emptyMap()) }
+    fun exportLine(i: Int, format: ai.forge.writing.DocFormat) {
+        val l = lines.getOrNull(i) ?: return
+        val title = ai.forge.writing.DocFormat.titleFrom(l.request ?: "Document Forge")
+        container.scope.launch {
+            runCatching { ai.forge.app.export.DocumentExporter.export(context, format, title, l.text) }
+                .onSuccess { uri -> exported = exported + (i to (uri to format)); ai.forge.app.export.DocumentExporter.open(context, uri, format) }
+                .onFailure { lines += ChatLine("Sécurité", "Impossible de créer le fichier : ${it.message}") }
+        }
+    }
     fun exportMotion(script: ai.forge.editorial.ViralScript) {
         val spec = ai.forge.editorial.MotionSpec.fromScript(script)
         container.scope.launch {
@@ -133,7 +144,11 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
                         val now = System.currentTimeMillis()
                         if (now - lastPaint > 50) { lines[idx] = lines[idx].copy(text = buf.toString()); lastPaint = now }
                     }
-                    is OrchestratorEvent.Completed -> lines[idx] = lines[idx].copy(text = e.fullText)
+                    is OrchestratorEvent.Completed -> {
+                        lines[idx] = lines[idx].copy(text = e.fullText)
+                        // Document demandé (« fais-moi un PDF… ») : le fichier est créé automatiquement.
+                        ai.forge.writing.DocFormat.requested(text)?.let { f -> exportLine(idx, f) }
+                    }
                     is OrchestratorEvent.MemoryEvent -> lines += ChatLine("Mémoire", memoryLabel(e))
                     is OrchestratorEvent.Failed -> { lines[idx] = lines[idx].copy(text = friendlyError(e.reason), meta = "Erreur"); container.voice.signal(PresenceSignal.Failure(e.reason)) }
                     else -> Unit
@@ -147,6 +162,16 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
     LaunchedEffect(lines.lastOrNull()?.text?.length?.div(80), lines.size) { if (lines.isNotEmpty()) listState.scrollToItem(lines.lastIndex, Int.MAX_VALUE / 2) }
 
     val orbState = when { voiceOn -> presence; busy -> PresenceState.THINKING; brain is AppContainer.BrainState.Error -> PresenceState.ERROR; else -> PresenceState.STANDBY }
+
+    exportFor?.let { i ->
+        androidx.compose.material3.AlertDialog(onDismissRequest = { exportFor = null }, containerColor = ForgePalette.SurfaceHigh, shape = RoundedCornerShape(28.dp),
+            title = { Text("Créer un fichier", color = ForgePalette.Text) },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ai.forge.writing.DocFormat.entries.forEach { f -> GlassPill(f.label, Icons.Default.Description, Modifier.fillMaxWidth()) { exportFor = null; exportLine(i, f) } }
+                Text("Enregistré dans Téléchargements/Forge.", style = MaterialTheme.typography.bodySmall, color = ForgePalette.TextMuted)
+            } },
+            confirmButton = {}, dismissButton = { androidx.compose.material3.TextButton(onClick = { exportFor = null }) { Text("Fermer", color = ForgePalette.TextMuted) } })
+    }
 
     feedbackFor?.let { i ->
         val l = lines.getOrNull(i)
@@ -199,6 +224,14 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
                                 Message(l, thinking = busy && i == lines.lastIndex && l.text.isEmpty())
                                 if (l.author == "Forge" && i == lines.lastIndex && !busy && lastScript != null) Row(Modifier.padding(top = 8.dp)) {
                                     GlassPill(motionStatus ?: "Créer l'animation (MP4)", Icons.Default.Movie) { lastScript?.let { exportMotion(it) } }
+                                }
+                                if (l.author == "Forge" && l.text.isNotBlank() && !(busy && i == lines.lastIndex)) Row(Modifier.padding(top = 6.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    exported[i]?.let { (uri, f) -> GlassPill("Ouvrir le ${f.label}", Icons.Default.Description) { ai.forge.app.export.DocumentExporter.open(context, uri, f) } }
+                                    GlassPill("Fichier", Icons.Default.IosShare) { exportFor = i }
+                                    if (i == lines.lastIndex && looksCut(l.text)) GlassPill("Continuer", Icons.Default.ArrowDownward) {
+                                        send("Continue exactement là où tu t'es arrêté, sans répéter.")
+                                    }
                                 }
                                 if (l.author == "Forge" && l.text.isNotBlank() && !(busy && i == lines.lastIndex) && l.request != null && !l.rated)
                                     FeedbackRow(onGood = {
@@ -352,4 +385,10 @@ private fun friendlyError(reason: String): String = when {
     Regex("réseau|network|timeout|Unable to resolve|failed to connect", RegexOption.IGNORE_CASE).containsMatchIn(reason) -> "Connexion impossible. Vérifiez Internet, ou utilisez le cerveau installé sur le téléphone."
     reason.contains("charger le modèle local") || reason.contains("Modèle local") -> "Le modèle local n'a pas pu démarrer. Fermez quelques applications puis réessayez ; si cela persiste, essayez Gemma 4 E2B dans Réglages."
     else -> "Je n'ai pas pu répondre (${reason.take(120)})."
+}
+
+/** Réponse probablement coupée par la limite de longueur (fin sans ponctuation finale). */
+private fun looksCut(text: String): Boolean {
+    val t = text.trimEnd()
+    return t.length > 1_200 && !Regex("[.!?…»)\\]*_`]$").containsMatchIn(t) && !t.contains("Contrôle de rétention") && !t.contains("Solidité :")
 }

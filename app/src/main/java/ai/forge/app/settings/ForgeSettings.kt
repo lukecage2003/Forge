@@ -17,7 +17,8 @@ data class ForgeSettings(
     val localOnly: Boolean = false,
     val autonomyCeiling: AutonomyLevel = AutonomyLevel.L2_REVERSIBLE,
     val voiceName: String? = null,
-    val speechRate: Float = 1.0f,
+    /** Débit conversationnel : 1,0 (défaut d'Android) sonne traînant en français. */
+    val speechRate: Float = 1.25f,
     val showTranscript: Boolean = true,
     /** Ce que les fournisseurs cloud peuvent recevoir (§14) — restrictif par défaut. */
     val cloudMaxDataClass: DataClass = DataClass.GENERAL,
@@ -47,7 +48,8 @@ data class ForgeSettings(
                 localOnly = p.getBoolean("localOnly", false),
                 autonomyCeiling = runCatching { AutonomyLevel.valueOf(p.getString("autonomy", null)!!) }.getOrDefault(AutonomyLevel.L2_REVERSIBLE),
                 voiceName = p.getString("voiceName", null),
-                speechRate = p.getFloat("speechRate", 1.0f),
+                // Migration v0.6 : l'ancien débit par défaut (1,0) était trop lent → 1,25.
+                speechRate = p.getFloat("speechRate", 1.25f).let { if (!p.getBoolean("rateMigrated", false) && it == 1.0f) 1.25f else it },
                 showTranscript = p.getBoolean("showTranscript", true),
                 cloudMaxDataClass = runCatching { DataClass.valueOf(p.getString("cloudData", null)!!) }.getOrDefault(DataClass.GENERAL),
                 cloudTasks = p.getStringSet("cloudTasks", null)?.mapNotNull { runCatching { TaskCategory.valueOf(it) }.getOrNull() }?.toSet()
@@ -77,7 +79,7 @@ data class ForgeSettings(
             .putInt("cloudDaily", cloudDailyRequestLimit ?: 0)
             .putFloat("cloudBudget", cloudMonthlyBudget?.toFloat() ?: -1f)
             .putString("searxngUrl", searxngUrl)
-            .putBoolean("wakeWord", requireWakeWord).putBoolean("bargeIn", bargeInWithoutHeadset).putBoolean("networkVoices", networkVoices)
+            .putBoolean("wakeWord", requireWakeWord).putBoolean("bargeIn", bargeInWithoutHeadset).putBoolean("networkVoices", networkVoices).putBoolean("rateMigrated", true)
             .apply()
     }
 }

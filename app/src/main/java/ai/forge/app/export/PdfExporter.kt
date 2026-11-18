@@ -1,36 +1,56 @@
 package ai.forge.app.export
 
+import ai.forge.writing.DocBlock
+import ai.forge.writing.DocFormat
+import ai.forge.writing.DocxWriter
+import ai.forge.writing.MarkdownDoc
+import android.content.ContentValues
+import android.content.Context
+import android.content.Intent
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
+import android.net.Uri
+import android.os.Environment
+import android.provider.MediaStore
 import android.text.Layout
+import android.text.SpannableStringBuilder
+import android.text.Spanned
 import android.text.StaticLayout
 import android.text.TextPaint
-import java.io.File
+import android.text.style.StyleSpan
+import android.text.style.TypefaceSpan
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
+import java.text.DateFormat
+import java.util.Date
 
-/** Export PDF natif (A4) d'un texte brut ou issu du Markdown (Exporters.markdownToPlainText). */
-object PdfExporter {
-    fun export(text: String, out: File, title: String? = null): File {
-        val doc = PdfDocument()
-        val pageW = 595; val pageH = 842; val margin = 50
-        val paint = TextPaint().apply { textSize = 11f; isAntiAlias = true }
-        val full = (title?.let { "$it\n\n" } ?: "") + text
-        val layout = StaticLayout.Builder.obtain(full, 0, full.length, paint, pageW - 2 * margin)
-            .setAlignment(Layout.Alignment.ALIGN_NORMAL).setLineSpacing(2f, 1.1f).build()
-        val usable = pageH - 2 * margin
-        var line = 0; var pageNo = 1
-        while (line < layout.lineCount) {
-            val page = doc.startPage(PdfDocument.PageInfo.Builder(pageW, pageH, pageNo++).create())
-            val startTop = layout.getLineTop(line)
-            var end = line
-            while (end < layout.lineCount && layout.getLineBottom(end) - startTop <= usable) end++
-            val c = page.canvas
-            c.save(); c.translate(margin.toFloat(), (margin - startTop).toFloat())
-            c.clipRect(0, startTop, pageW - 2 * margin, layout.getLineBottom(end - 1))
-            layout.draw(c); c.restore()
-            doc.finishPage(page)
-            line = end
+/** Création de fichiers (PDF, Word, Markdown, texte) dans Téléchargements/Forge, puis partage. */
+object DocumentExporter {
+    suspend fun export(context: Context, format: DocFormat, title: String, markdown: String): Uri = withContext(Dispatchers.IO) {
+        val bytes = when (format) {
+            DocFormat.PDF -> ai.forge.writing.PdfWriter.write(title, markdown)
+            DocFormat.DOCX -> DocxWriter.write(title, markdown)
+            DocFormat.MARKDOWN -> "# $title\n\n$markdown".toByteArray()
+            DocFormat.TXT -> (title + "\n\n" + MarkdownDoc.plainText(markdown)).toByteArray()
         }
-        out.outputStream().use { doc.writeTo(it) }
-        doc.close()
-        return out
+        val safe = title.replace(Regex("[^\\p{L}\\p{N} _-]"), "").trim().take(60).ifBlank { "Document Forge" }
+        val values = ContentValues().apply {
+            put(MediaStore.Downloads.DISPLAY_NAME, "$safe.${format.extension}")
+            put(MediaStore.Downloads.MIME_TYPE, format.mime)
+            put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Forge")
+        }
+        val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)!!
+        context.contentResolver.openOutputStream(uri)!!.use { it.write(bytes) }
+        uri
+    }
+
+    fun open(context: Context, uri: Uri, format: DocFormat) {
+        val view = Intent(Intent.ACTION_VIEW).setDataAndType(uri, format.mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        val share = Intent(Intent.ACTION_SEND).setType(format.mime).putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        context.startActivity(Intent.createChooser(share, "Ouvrir ou partager").putExtra(Intent.EXTRA_INITIAL_INTENTS, arrayOf(view))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 }

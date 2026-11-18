@@ -4,6 +4,8 @@ import ai.forge.core.model.AutonomyLevel
 import ai.forge.memory.*
 import ai.forge.models.*
 import ai.forge.security.*
+import ai.forge.core.model.ChatMessage
+import ai.forge.core.model.Role
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.int
@@ -219,5 +221,34 @@ class LessonsTest {
         val sys = p.requests.first().messages.first().content
         assertTrue(sys.contains("Ne cite jamais Fandom comme preuve"))
         assertTrue(sys.contains("Sois plus bref le matin"))     // leçon générale : partout
+    }
+}
+
+class ContextBudgetTest {
+    @Test fun keepsMostRecentTurnsWithinBudgetAndAlwaysTheQuestion() {
+        val turns = (1..50).map { ChatMessage(if (it % 2 == 0) Role.ASSISTANT else Role.USER, "message $it " + "x".repeat(300)) }
+        val kept = ContextBudget.fit(turns, 1_000)
+        assertTrue(kept.size in 2..12); assertEquals(turns.last(), kept.last())
+        assertTrue(kept.sumOf { ContextBudget.estimate(it.content) } <= 1_000)
+        val huge = listOf(ChatMessage(Role.USER, "y".repeat(100_000)))
+        assertEquals(1, ContextBudget.fit(huge, 1_000).size)
+        assertTrue(ContextBudget.fit(huge, 1_000).single().content.length < 10_000)
+    }
+
+    @Test fun longConversationNeverOverflowsSmallModel() = runTest {
+        val p = ScriptedProvider(capabilities = ProviderCapabilities(Locality.ON_DEVICE, 4_096, reasoningQuality = 3)) { "Réponse " + "z".repeat(900) }
+        val o = Orchestrator(ProviderRouter(listOf(p)), MemoryManager(InMemoryMemoryStore(), HashingEmbedder()))
+        val ctx = ConversationContext("long", maxTurns = 500)
+        repeat(30) { o.handle("Question numéro $it, parle-moi encore de Thor et de Mjolnir", ctx, voice = false).toList() }
+        val last = p.requests.last()
+        assertTrue(last.messages.sumOf { ContextBudget.estimate(it.content) } + last.maxTokens <= 4_096)
+        assertTrue(last.messages.last().content.contains("Question numéro 29"))
+    }
+
+    @Test fun documentRequestAsksForStructuredMarkdown() = runTest {
+        val p = ScriptedProvider(capabilities = ProviderCapabilities(Locality.ON_DEVICE, 8_192, reasoningQuality = 3)) { "# Doc" }
+        Orchestrator(ProviderRouter(listOf(p)), MemoryManager(InMemoryMemoryStore(), HashingEmbedder()))
+            .handle("Fais-moi un PDF sur l'histoire des Avengers", ConversationContext("pdf"), voice = false).toList()
+        assertTrue(p.requests.first().messages.first().content.contains("document PDF"))
     }
 }
