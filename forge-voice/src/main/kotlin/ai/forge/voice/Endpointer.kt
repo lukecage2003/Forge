@@ -11,9 +11,10 @@ import ai.forge.core.text.TextUtils
  * si elle se termine clairement (question, ponctuation forte).
  */
 class Endpointer(
-    private val baseSilenceMs: Long = 700,
-    private val hesitationSilenceMs: Long = 1_800,
-    private val decisiveSilenceMs: Long = 450,
+    // Silences calibrés sur une parole naturelle : on laisse le temps de réfléchir en parlant.
+    private val baseSilenceMs: Long = 1_300,
+    private val hesitationSilenceMs: Long = 2_600,
+    private val decisiveSilenceMs: Long = 800,
 ) {
     private val hesitations = setOf("euh", "heu", "hum", "hmm", "bah", "ben", "bref")
     private val danglingWords = setOf(

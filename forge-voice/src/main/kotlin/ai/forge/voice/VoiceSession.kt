@@ -47,11 +47,17 @@ class VoiceSessionController(
     private val bargeIn: BargeInClassifier = BargeInClassifier(),
     private val onInterruptedPartial: (String) -> Unit = {},
     private val onSessionEnd: () -> Unit = {},
+    private val mergeWindowMs: Long = 20_000,
+    private val now: () -> Long = System::currentTimeMillis,
 ) {
     private val _state = MutableStateFlow(VoiceState.IDLE)
     val state: StateFlow<VoiceState> = _state.asStateFlow()
 
     private var responseJob: Job? = null
+    /** Dernier énoncé traité et moment où il a été reçu (pour recoller une phrase coupée). */
+    private var lastUtterance: String? = null
+    private var lastUtteranceAt = 0L
+    private var spokeSinceLast = false
     private val spoken = StringBuilder()
 
     fun start() { _state.value = VoiceState.LISTENING }
@@ -83,11 +89,16 @@ class VoiceSessionController(
             }
             is BargeIn.NewUtterance -> Unit
         }
-        cancelResponse(recordPartial = true)
-        launchResponse(text)
+        // Pause au milieu d'une phrase : si Forge n'a pas encore commencé à répondre, la suite est
+        // recollée à ce qui précède au lieu de remplacer la question.
+        val previous = lastUtterance
+        val continuation = previous != null && !spokeSinceLast && _state.value == VoiceState.THINKING && now() - lastUtteranceAt < mergeWindowMs
+        cancelResponse(recordPartial = !continuation)
+        launchResponse(if (continuation) "$previous $text" else text)
     }
 
     private fun launchResponse(utterance: String) {
+        lastUtterance = utterance; lastUtteranceAt = now(); spokeSinceLast = false
         _state.value = VoiceState.THINKING
         spoken.clear()
         responseJob = scope.launch {
@@ -102,6 +113,7 @@ class VoiceSessionController(
     }
 
     private suspend fun speakSegment(seg: String) {
+        spokeSinceLast = true
         _state.value = VoiceState.SPEAKING
         output.speak(seg)
         spoken.append(seg).append(' ')

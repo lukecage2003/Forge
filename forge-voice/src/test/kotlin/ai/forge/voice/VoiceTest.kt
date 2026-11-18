@@ -11,10 +11,11 @@ import kotlin.test.*
 class VoiceTest {
     @Test fun endpointerWaitsLongerAfterHesitation() {
         val e = Endpointer()
-        assertFalse(e.isEndOfTurn("Forge, tu sais, je repensais au film et euh", 1_000))
-        assertFalse(e.isEndOfTurn("Je pensais que", 1_000))
-        assertTrue(e.isEndOfTurn("Tu en penses quoi ?", 500))
-        assertTrue(e.isEndOfTurn("Je repensais au film Superman de Christopher Reeve", 800))
+        assertFalse(e.isEndOfTurn("Forge, tu sais, je repensais au film et euh", 2_000))
+        assertFalse(e.isEndOfTurn("Je pensais que", 2_000))
+        assertFalse(e.isEndOfTurn("Je repensais au film Superman", 900))   // petite pause : on attend
+        assertTrue(e.isEndOfTurn("Tu en penses quoi ?", 900))
+        assertTrue(e.isEndOfTurn("Je repensais au film Superman de Christopher Reeve", 1_400))
     }
 
     @Test fun bargeInClassification() {
@@ -107,5 +108,26 @@ class VoiceTest {
         assertEquals(1, out.idleAwaited)
         assertEquals(VoiceState.LISTENING, ctl.state.value)
         assertTrue(out.queued.isNotEmpty())
+    }
+
+    @Test fun continuationAfterPauseIsMergedNotReplacing() = runTest {
+        val asked = mutableListOf<String>()
+        val gate = CompletableDeferred<Unit>()
+        val source = ResponseSource { u -> asked += u; flow { gate.await(); emit("Réponse complète et assez longue pour être dite. ") } }
+        val ctl = VoiceSessionController(this, FakeOutput(), source, now = { 1_000 })
+        ctl.start()
+        ctl.onFinalUtterance("Je voudrais un script sur Black Panther")
+        advanceUntilIdle()
+        ctl.onFinalUtterance("et sur son costume en vibranium")      // suite après une pause
+        gate.complete(Unit); advanceUntilIdle()
+        assertEquals("Je voudrais un script sur Black Panther et sur son costume en vibranium", asked.last())
+    }
+
+    @Test fun newQuestionAfterForgeSpokeIsNotMerged() = runTest {
+        val asked = mutableListOf<String>()
+        val ctl = VoiceSessionController(this, FakeOutput(), { u -> asked += u; flow { emit("Une réponse complète et suffisamment longue pour être dite. ") } }, now = { 1_000 })
+        ctl.start(); ctl.onFinalUtterance("Parle-moi de Thor"); advanceUntilIdle()
+        ctl.onFinalUtterance("Et de Loki ?"); advanceUntilIdle()
+        assertEquals("Et de Loki ?", asked.last())
     }
 }

@@ -90,12 +90,12 @@ class ResearchFlowTest {
     @Test fun researchSourcesAreInjectedAndBibliographyAppendedByCode() = runTest {
         val tool = ResearchTool { q -> ResearchContext("[1] Source A : le vibranium absorbe l'énergie.", "[1] Source A — https://a.example", 1, 2, 0) }
         val p = ScriptedProvider(capabilities = ProviderCapabilities(Locality.ON_DEVICE, 32_000, reasoningQuality = 5)) { req ->
-            if (req.messages.first().content.contains("VERDICT")) "VERDICT: OK\nPROBLEMES: aucun" else "D'après [1], le vibranium absorbe l'énergie."
+            if (req.messages.joinToString("\n") { it.content }.contains("VERDICT")) "VERDICT: OK\nPROBLEMES: aucun" else "D'après [1], le vibranium absorbe l'énergie."
         }
         val o = Orchestrator(ProviderRouter(listOf(p)), memory(), researchTool = tool)
         val ev = o.handle("Fais une recherche sur les sources récentes concernant le vibranium", ConversationContext("r"), voice = false).toList()
         assertEquals(1, ev.filterIsInstance<OrchestratorEvent.ResearchDone>().single().sourceCount)
-        assertTrue(p.requests.first().messages.first().content.contains("Source A"))
+        assertTrue(p.requests.first().messages.joinToString("\n") { it.content }.contains("Source A"))
         val done = ev.filterIsInstance<OrchestratorEvent.Completed>().single().fullText
         assertTrue(done.endsWith("[1] Source A — https://a.example"), done)
     }
@@ -103,7 +103,7 @@ class ResearchFlowTest {
     @Test fun withoutResearchToolForgeSaysSo() = runTest {
         val p = ScriptedProvider(capabilities = ProviderCapabilities(Locality.ON_DEVICE, 32_000, reasoningQuality = 5)) { "VERDICT: OK\nPROBLEMES: aucun" }
         Orchestrator(ProviderRouter(listOf(p)), memory()).handle("Recherche les sources sur ce sujet", ConversationContext("r2"), voice = false).toList()
-        assertTrue(p.requests.first().messages.first().content.contains("Aucune recherche Web n'a pu être effectuée"))
+        assertTrue(p.requests.first().messages.joinToString("\n") { it.content }.contains("Aucune recherche Web n'a pu être effectuée"))
     }
 }
 
@@ -111,12 +111,12 @@ class LibraryFlowTest {
     @Test fun comicsAnswerCitesRealLibraryReferences() = runTest {
         val lib = LibraryTool { listOf(LibraryPassage("Black Panther #8 (2016), p. 2", "Mon costume absorbe l'énergie cinétique", verified = false)) }
         val p = ScriptedProvider(capabilities = ProviderCapabilities(Locality.ON_DEVICE, 32_000, reasoningQuality = 5)) { req ->
-            if (req.messages.first().content.contains("VERDICT")) "VERDICT: OK\nPROBLEMES: aucun" else "Piste : [B1]."
+            if (req.messages.joinToString("\n") { it.content }.contains("VERDICT")) "VERDICT: OK\nPROBLEMES: aucun" else "Piste : [B1]."
         }
         val o = Orchestrator(ProviderRouter(listOf(p)), MemoryManager(InMemoryMemoryStore(), HashingEmbedder()), libraryTool = lib)
         val ev = o.handle("Retrouve dans mes comics la preuve que le costume de Black Panther absorbe l'énergie", ConversationContext("l"), voice = false).toList()
         assertEquals(1, ev.filterIsInstance<OrchestratorEvent.LibraryResults>().single().passages.size)
-        assertTrue(p.requests.any { r -> r.messages.first().content.contains("Black Panther #8 (2016), p. 2 (non vérifié)") })
+        assertTrue(p.requests.any { r -> r.messages.joinToString("\n") { it.content }.contains("Black Panther #8 (2016), p. 2 (non vérifié)") })
         val done = ev.filterIsInstance<OrchestratorEvent.Completed>().single().fullText
         assertTrue(done.contains("[B1] Black Panther #8 (2016), p. 2 — piste OCR, page à consulter"), done)
     }
@@ -169,7 +169,7 @@ class ScriptFlowTest {
         val ready = ev.filterIsInstance<OrchestratorEvent.ScriptReady>().single()
         assertTrue(ready.revised)
         assertEquals("Le costume de T'Challa a une faille.", ready.script.beats.first().narration)
-        assertTrue(p.requests.first().messages.first().content.contains("Règles de rétention"))
+        assertTrue(p.requests.first().messages.joinToString("\n") { it.content }.contains("Règles de rétention"))
         val done = ev.filterIsInstance<OrchestratorEvent.Completed>().single().fullText
         assertTrue(done.contains("Contrôle de rétention"))
         assertEquals(2, p.requests.size)
@@ -180,7 +180,7 @@ class ScriptFlowTest {
         val market = MarketTool { _, _ -> "- Les titres en question surperforment (x3,2)" }
         Orchestrator(ProviderRouter(listOf(p)), MemoryManager(InMemoryMemoryStore(), HashingEmbedder()), marketTool = market)
             .handle("Fais un script Short YouTube sur Venom", ConversationContext("m"), voice = false).toList()
-        assertTrue(p.requests.first().messages.first().content.contains("x3,2"))
+        assertTrue(p.requests.first().messages.joinToString("\n") { it.content }.contains("x3,2"))
     }
 }
 
@@ -205,7 +205,7 @@ class DebateFlowTest {
         assertTrue(done.contains("1/2"), done)
         assertTrue(done.contains("Non sourcé"))
         assertEquals(1, p.requests.size)                      // une seule passe, contrôle déterministe
-        assertTrue(p.requests.first().messages.first().content.contains("B1 (vérifiée)"))
+        assertTrue(p.requests.first().messages.joinToString("\n") { it.content }.contains("B1 (vérifiée)"))
     }
 }
 
@@ -218,7 +218,7 @@ class LessonsTest {
             Provenance(Provenance.Type.CORRECTION, "f2"), tags = setOf("leçon", "conversation", "général")), confirmed = true)
         val p = ScriptedProvider(capabilities = ProviderCapabilities(Locality.ON_DEVICE, 32_000, reasoningQuality = 4)) { "VERDICT: OK\nPROBLEMES: aucun" }
         Orchestrator(ProviderRouter(listOf(p)), m).handle("Dans quel comic Black Panther absorbe l'énergie ?", ConversationContext("l"), voice = false).toList()
-        val sys = p.requests.first().messages.first().content
+        val sys = p.requests.first().messages.joinToString("\n") { it.content }
         assertTrue(sys.contains("Ne cite jamais Fandom comme preuve"))
         assertTrue(sys.contains("Sois plus bref le matin"))     // leçon générale : partout
     }
@@ -249,6 +249,6 @@ class ContextBudgetTest {
         val p = ScriptedProvider(capabilities = ProviderCapabilities(Locality.ON_DEVICE, 8_192, reasoningQuality = 3)) { "# Doc" }
         Orchestrator(ProviderRouter(listOf(p)), MemoryManager(InMemoryMemoryStore(), HashingEmbedder()))
             .handle("Fais-moi un PDF sur l'histoire des Avengers", ConversationContext("pdf"), voice = false).toList()
-        assertTrue(p.requests.first().messages.first().content.contains("document PDF"))
+        assertTrue(p.requests.first().messages.joinToString("\n") { it.content }.contains("document PDF"))
     }
 }

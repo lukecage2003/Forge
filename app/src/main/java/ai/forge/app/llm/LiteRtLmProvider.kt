@@ -72,6 +72,17 @@ class LiteRtLmProvider(
         }
     }
 
+    /**
+     * Conversation gardée d'un tour à l'autre : si la nouvelle requête prolonge exactement la
+     * précédente (mêmes instructions, mêmes réponses), seul le nouveau message est traité —
+     * le moteur ne relit plus toute la conversation (gain majeur de latence).
+     */
+    private class Live(val conversation: com.google.ai.edge.litertlm.Conversation, val system: String, val shape: List<Pair<Role, String>>)
+    @Volatile private var live: Live? = null
+
+    private fun shapeOf(turns: List<ai.forge.core.model.ChatMessage>) =
+        turns.map { it.role to if (it.role == Role.ASSISTANT) it.content.trim() else "" }
+
     override fun stream(request: ChatRequest): Flow<LlmEvent> = flow {
         val e = try { engine() } catch (t: Throwable) {
             emit(LlmEvent.Failure("Impossible de charger le modèle local : ${t.message}", t)); return@flow
@@ -79,32 +90,34 @@ class LiteRtLmProvider(
         val system = request.messages.filter { it.role == Role.SYSTEM }.joinToString("\n\n") { it.content }
         val turns = request.messages.filter { it.role != Role.SYSTEM }
         val last = turns.lastOrNull { it.role == Role.USER } ?: run { emit(LlmEvent.Done("vide")); return@flow }
-        val history = turns.dropLast(1).map { m ->
-            if (m.role == Role.ASSISTANT) Message.model(m.content) else Message.user(m.content)
+        val history = turns.dropLast(1)
+        val reusable = live?.takeIf { it.system == system && it.shape == shapeOf(history) && it.conversation.isAlive }
+        val conversation = reusable?.conversation ?: run {
+            live?.let { runCatching { it.conversation.close() } }; live = null
+            e.createConversation(ConversationConfig(
+                systemInstruction = if (system.isBlank()) null else Contents.of(system),
+                initialMessages = history.map { m -> if (m.role == Role.ASSISTANT) Message.model(m.content) else Message.user(m.content) },
+                samplerConfig = SamplerConfig(topK = 40, topP = 0.95, temperature = request.temperature, seed = 0),
+            ))
         }
-        val conversation = e.createConversation(ConversationConfig(
-            systemInstruction = if (system.isBlank()) null else Contents.of(system),
-            initialMessages = history,
-            samplerConfig = SamplerConfig(topK = 40, topP = 0.95, temperature = request.temperature, seed = 0),
-        ))
+        var emitted = ""
         try {
-            var emitted = ""
             conversation.sendMessageAsync(last.content).collect { msg ->
                 val text = msg.contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text }
                 // Le moteur peut renvoyer des fragments ou le texte cumulé : on n'émet que le nouveau.
                 val delta = if (text.startsWith(emitted) && emitted.isNotEmpty()) text.removePrefix(emitted) else text
                 if (delta.isNotEmpty()) { emit(LlmEvent.Token(delta)); emitted = if (text.startsWith(emitted)) text else emitted + delta }
             }
+            live = Live(conversation, system, shapeOf(history) + (Role.USER to "") + (Role.ASSISTANT to emitted.trim()))
             emit(LlmEvent.Done("stop"))
         } catch (c: kotlinx.coroutines.CancellationException) {
-            runCatching { conversation.cancelProcess() }
+            runCatching { conversation.cancelProcess() }; runCatching { conversation.close() }; live = null
             throw c
         } catch (t: Throwable) {
+            runCatching { conversation.close() }; live = null
             emit(LlmEvent.Failure("Modèle local : ${t.message}", t))
-        } finally {
-            runCatching { conversation.close() }
         }
     }.flowOn(Dispatchers.IO)
 
-    fun release() { runCatching { engine?.close() }; engine = null; activeBackend.value = null }
+    fun release() { live?.let { runCatching { it.conversation.close() } }; live = null; runCatching { engine?.close() }; engine = null; activeBackend.value = null }
 }

@@ -122,7 +122,8 @@ class Orchestrator(
         // Sur un modèle embarqué, chaque passe coûte plusieurs secondes : une seule passe diffusée
         // immédiatement, sauf là où le contrôle protège contre l'invention (comics, éditorial, recherche).
         val onDevice = provider.capabilities.locality == Locality.ON_DEVICE
-        val verify = intent.needsVerification && (!onDevice || intent.primary in GUARDED)
+        // À l'oral, la réponse doit venir vite : jamais de seconde passe de contrôle.
+        val verify = !voice && intent.needsVerification && (!onDevice || intent.primary in GUARDED)
         val steps = buildList {
             if (intent.depth >= ThinkingDepth.DEEP_RESEARCH && !onDevice) addAll(intent.supporting)
             add(intent.primary)
@@ -141,7 +142,7 @@ class Orchestrator(
         // Recherche automatique : demandes de recherche, mais aussi comics et éditorial (faits à vérifier).
         val wantsResearch = intent.primary in setOf(SpecialistId.RESEARCH, SpecialistId.COMICS, SpecialistId.EDITORIAL) ||
             (SpecialistId.RESEARCH in intent.supporting && intent.depth >= ThinkingDepth.DEEP_RESEARCH)
-        if (wantsResearch && (researchTool != null || intent.primary == SpecialistId.RESEARCH)) {
+        if (wantsResearch && (!voice || intent.primary == SpecialistId.RESEARCH) && (researchTool != null || intent.primary == SpecialistId.RESEARCH)) {
             val tool = researchTool
             if (tool == null) researchNote = "Aucune recherche Web n'a pu être effectuée (outil indisponible ou hors-ligne) : réponds avec tes connaissances en le signalant clairement, sans inventer de source."
             else runCatching { tool.research(input) }.onSuccess { r ->
@@ -265,12 +266,20 @@ class Orchestrator(
     @Volatile private var budgetTokens: Int = 8_192
 
     private fun request(spec: SpecialistSpec, ctx: ConversationContext, voice: Boolean, memoryContext: String, extra: String?, securityRule: String? = null): ChatRequest {
-        val system = ForgePersona.systemPrompt(voice, "Spécialiste actif : ${spec.name}. ${spec.mission}\n${spec.instructions}", memoryContext) +
-            (securityRule?.let { "\n\n$it" } ?: "") + (extra?.let { "\n\n$it" } ?: "")
+        // Instructions stables dans le message système (réutilisables d'un tour à l'autre par le moteur
+        // local, qui n'a alors plus à relire toute la conversation) ; le contexte propre à la question
+        // (souvenirs, sources, consignes de tâche) est joint à la question elle-même.
+        val system = ForgePersona.systemPrompt(voice, "Spécialiste actif : ${spec.name}. ${spec.mission}\n${spec.instructions}") +
+            (securityRule?.let { "\n\n$it" } ?: "")
+        val dynamic = listOfNotNull(memoryContext.ifBlank { null }?.let { "Éléments de mémoire pertinents (à utiliser avec discernement, sans les réciter) :\n$it" }, extra)
+            .joinToString("\n\n")
         val maxOut = if (voice) 600 else minOf(3_000, budgetTokens / 3)
-        return ChatRequest(listOf(ChatMessage(Role.SYSTEM, system)) + ContextBudget.fit(ctx.turns, budgetTokens - maxOut - ContextBudget.estimate(system)),
-            temperature = spec.temperature, maxTokens = maxOut)
+        val turns = ContextBudget.fit(ctx.turns, budgetTokens - maxOut - ContextBudget.estimate(system) - ContextBudget.estimate(dynamic))
+        val withContext = if (dynamic.isBlank() || turns.isEmpty() || turns.last().role != Role.USER) turns
+            else turns.dropLast(1) + turns.last().copy(content = "[Contexte pour cette question — ne le cite pas tel quel]\n$dynamic\n\n[Question]\n${turns.last().content}")
+        return ChatRequest(listOf(ChatMessage(Role.SYSTEM, system)) + withContext, temperature = spec.temperature, maxTokens = maxOut)
     }
+
 
     private suspend fun handleAction(input: String, intent: Intent, emit: suspend (OrchestratorEvent) -> Unit): String {
         val planner = actionPlanner; val executor = actionExecutor
