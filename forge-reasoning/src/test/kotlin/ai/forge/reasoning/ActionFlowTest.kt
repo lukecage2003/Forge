@@ -206,3 +206,18 @@ class DebateFlowTest {
         assertTrue(p.requests.first().messages.first().content.contains("B1 (vérifiée)"))
     }
 }
+
+class LessonsTest {
+    @Test fun lessonsFromFeedbackAreInjectedForMatchingSpecialist() = runTest {
+        val m = MemoryManager(InMemoryMemoryStore(), HashingEmbedder())
+        m.remember(MemoryCandidate(MemoryKind.PROCEDURAL, "Leçon (Mauvaise source, comics) : Ne cite jamais Fandom comme preuve",
+            Provenance(Provenance.Type.CORRECTION, "f1"), tags = setOf("leçon", "comics")), confirmed = true)
+        m.remember(MemoryCandidate(MemoryKind.PROCEDURAL, "Leçon (Ton inadapté, conversation) : Sois plus bref le matin",
+            Provenance(Provenance.Type.CORRECTION, "f2"), tags = setOf("leçon", "conversation", "général")), confirmed = true)
+        val p = ScriptedProvider(capabilities = ProviderCapabilities(Locality.ON_DEVICE, 32_000, reasoningQuality = 4)) { "VERDICT: OK\nPROBLEMES: aucun" }
+        Orchestrator(ProviderRouter(listOf(p)), m).handle("Dans quel comic Black Panther absorbe l'énergie ?", ConversationContext("l"), voice = false).toList()
+        val sys = p.requests.first().messages.first().content
+        assertTrue(sys.contains("Ne cite jamais Fandom comme preuve"))
+        assertTrue(sys.contains("Sois plus bref le matin"))     // leçon générale : partout
+    }
+}

@@ -282,6 +282,19 @@ class AppContainer(val app: Application) {
         }
     }
 
+    private val feedbackLog = ai.forge.evaluation.FeedbackLog()
+
+    /**
+     * Retour de l'utilisateur sur une réponse. Un retour négatif commenté devient une leçon
+     * appliquée aux réponses suivantes (pas de réentraînement du modèle : ses instructions évoluent).
+     */
+    fun recordFeedback(specialist: String, request: String, response: String, kind: ai.forge.evaluation.FeedbackKind, comment: String?) {
+        val f = ai.forge.evaluation.Feedback(java.util.UUID.randomUUID().toString(), conversation.id, specialist, "v1", kind,
+            request, response, comment?.ifBlank { null }, System.currentTimeMillis())
+        feedbackLog.add(f)
+        feedbackLog.lessonFrom(f)?.let { scope.launch { memory.remember(it, confirmed = true) } }
+    }
+
     fun newConversation() { conversation = ConversationContext(UUID.randomUUID().toString()) }
 
     // Déclaré en dernier : le rappel réseau peut arriver immédiatement et utilise tout ce qui précède.

@@ -29,7 +29,8 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 
-data class ChatLine(val author: String, val text: String, val meta: String? = null, val pendingAction: ai.forge.security.ToolCall? = null)
+data class ChatLine(val author: String, val text: String, val meta: String? = null, val pendingAction: ai.forge.security.ToolCall? = null,
+    val specialist: String? = null, val request: String? = null, val rated: Boolean = false)
 
 private data class Tab(val id: String, val icon: ImageVector, val label: String)
 private val tabs = listOf(

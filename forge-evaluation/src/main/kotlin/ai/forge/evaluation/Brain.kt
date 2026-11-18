@@ -54,7 +54,7 @@ class FeedbackLog {
             text = "Leçon (${f.kind.label}, ${f.specialist.lowercase()}) : ${f.userComment.trim()}",
             provenance = Provenance(Provenance.Type.CORRECTION, f.id, f.userRequest.take(200)),
             key = null,
-            tags = setOf("leçon", f.specialist.lowercase(), f.kind.name.lowercase()),
+            tags = setOf("leçon", f.specialist.lowercase(), f.kind.name.lowercase()) + if (f.kind == FeedbackKind.WRONG_TONE) setOf("général") else emptySet(),
             needsConfirmation = true,
         )
     }

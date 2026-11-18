@@ -78,6 +78,7 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
     val brainDetail by container.brainDetail.collectAsState()
     val listState = rememberLazyListState()
     var pageToImport by remember { mutableStateOf<android.net.Uri?>(null) }
+    var feedbackFor by remember { mutableStateOf<Int?>(null) }
     val pagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> pageToImport = uri }
 
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -97,7 +98,7 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
         busy = true
         lines += ChatLine("Vous", text.trim())
         val idx = lines.size
-        lines += ChatLine("Forge", "")
+        lines += ChatLine("Forge", "", request = text.trim())
         scope.launch {
             listState.animateScrollToItem(lines.lastIndex)
             val buf = StringBuilder()
@@ -108,6 +109,7 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
                     is OrchestratorEvent.ActionResult -> if (e.outcome.status == ActionOutcome.Status.NEEDS_CONFIRMATION)
                         lines[idx] = lines[idx].copy(pendingAction = e.call)
                     is OrchestratorEvent.SecurityWarning -> lines += ChatLine("Sécurité", "Contenu externe suspect ignoré comme instruction (${e.source}).")
+                    is OrchestratorEvent.Planned -> lines[idx] = lines[idx].copy(specialist = e.intent.primary.name.lowercase())
                     is OrchestratorEvent.Token -> { buf.append(e.text); lines[idx] = lines[idx].copy(text = buf.toString()) }
                     is OrchestratorEvent.MemoryEvent -> lines += ChatLine("Mémoire", memoryLabel(e))
                     is OrchestratorEvent.Failed -> { lines[idx] = lines[idx].copy(text = e.reason, meta = "Erreur"); container.voice.signal(PresenceSignal.Failure(e.reason)) }
@@ -122,6 +124,15 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
     LaunchedEffect(lines.lastOrNull()?.text?.length) { if (lines.isNotEmpty() && busy) listState.scrollToItem(lines.lastIndex, Int.MAX_VALUE / 2) }
 
     val orbState = when { voiceOn -> presence; busy -> PresenceState.THINKING; brain is AppContainer.BrainState.Error -> PresenceState.ERROR; else -> PresenceState.STANDBY }
+
+    feedbackFor?.let { i ->
+        val l = lines.getOrNull(i)
+        if (l != null) FeedbackDialog(onSend = { kind, comment ->
+            container.recordFeedback(l.specialist ?: "conversation", l.request ?: "", l.text, kind, comment)
+            lines[i] = l.copy(rated = true); feedbackFor = null
+            lines += ChatLine("Mémoire", if (comment.isNotBlank()) "Leçon retenue : je l'appliquerai désormais." else "Retour noté.")
+        }, onCancel = { feedbackFor = null })
+    }
 
     pageToImport?.let { uri ->
         PageImportDialog(container, uri, onDone = { msg -> pageToImport = null; lines += ChatLine("Mémoire", msg) }, onCancel = { pageToImport = null })
@@ -163,6 +174,11 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
                     itemsIndexed(lines) { i, l ->
                         Column(Modifier.animateItem(fadeInSpec = tween(250))) {
                                 Message(l, thinking = busy && i == lines.lastIndex && l.text.isEmpty())
+                                if (l.author == "Forge" && l.text.isNotBlank() && !(busy && i == lines.lastIndex) && l.request != null && !l.rated)
+                                    FeedbackRow(onGood = {
+                                        container.recordFeedback(l.specialist ?: "conversation", l.request, l.text, ai.forge.evaluation.FeedbackKind.CORRECT, null)
+                                        lines[i] = l.copy(rated = true)
+                                    }, onBad = { feedbackFor = i })
                                 l.pendingAction?.let { call ->
                                     Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         GoldButton("Confirmer") {
@@ -265,4 +281,39 @@ private fun statusLine(voiceOn: Boolean, presence: PresenceState, brain: AppCont
     detail != null -> detail + if (!online) " · hors-ligne" else ""
     !online -> "Hors-ligne · fonctions locales"
     else -> "Prêt"
+}
+
+@Composable
+private fun FeedbackRow(onGood: () -> Unit, onBad: () -> Unit) {
+    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Icon(Icons.Default.ThumbUp, "Bonne réponse", tint = ForgePalette.TextMuted, modifier = Modifier.size(18.dp).clickableNoRipple(onGood))
+        Icon(Icons.Default.ThumbDown, "Réponse à améliorer", tint = ForgePalette.TextMuted, modifier = Modifier.size(18.dp).clickableNoRipple(onBad))
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FeedbackDialog(onSend: (ai.forge.evaluation.FeedbackKind, String) -> Unit, onCancel: () -> Unit) {
+    var kind by remember { mutableStateOf(ai.forge.evaluation.FeedbackKind.INCORRECT) }
+    var comment by remember { mutableStateOf("") }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onCancel, containerColor = ForgePalette.SurfaceHigh, shape = RoundedCornerShape(28.dp),
+        title = { Text("Qu'est-ce qui n'allait pas ?", color = ForgePalette.Text) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ai.forge.evaluation.FeedbackKind.entries.filter { !it.positive }.forEach { k ->
+                        val on = k == kind
+                        Text(k.label, Modifier.clip(CircleShape).background(if (on) ForgePalette.Gold else Color.White.copy(alpha = 0.08f))
+                            .clickableNoRipple { kind = k }.padding(horizontal = 12.dp, vertical = 7.dp),
+                            style = MaterialTheme.typography.labelMedium, color = if (on) ForgePalette.Black else ForgePalette.Text)
+                    }
+                }
+                androidx.compose.material3.OutlinedTextField(comment, { comment = it }, placeholder = { Text("Ce que Forge doit faire autrement (il s'en souviendra)") },
+                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
+            }
+        },
+        confirmButton = { GoldButton("Envoyer") { onSend(kind, comment) } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = onCancel) { Text("Annuler", color = ForgePalette.TextMuted) } },
+    )
 }

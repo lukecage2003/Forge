@@ -103,9 +103,14 @@ class Orchestrator(
         val hits = if (primary.memoryKinds.isEmpty()) emptyList()
             else memory.recall(MemoryQuery(input, primary.memoryKinds, limit = 6))
         val dataClass = classify(intent, hits)
-        val (memoryContext, externalUsed) = buildMemoryContext(hits) { src, findings ->
+        val (recalled, externalUsed) = buildMemoryContext(hits) { src, findings ->
             emit(OrchestratorEvent.SecurityWarning(src, findings))
         }
+        // Amélioration continue : les leçons tirées des retours de l'utilisateur sont toujours appliquées.
+        val lessons = lessonsFor(intent.primary)
+        val memoryContext = listOfNotNull(recalled.ifBlank { null },
+            lessons.takeIf { it.isNotEmpty() }?.joinToString("\n", prefix = "Leçons tirées de tes erreurs passées (applique-les) :\n") { "- $it" })
+            .joinToString("\n\n")
 
         val needs = RoutingNeeds(depth = intent.depth, task = taskOf(intent.primary), dataClass = dataClass)
         val provider = router.select(needs)
@@ -336,6 +341,12 @@ class Orchestrator(
         return text
     }
 
+    /** Leçons enregistrées depuis les retours : celles du spécialiste actif et les leçons générales. */
+    private suspend fun lessonsFor(id: SpecialistId, max: Int = 6): List<String> =
+        memory.list().filter { it.kind == ai.forge.memory.MemoryKind.PROCEDURAL && LESSON_TAG in it.tags &&
+            (it.tags.contains(id.name.lowercase()) || it.tags.contains(GENERAL_LESSON)) }
+            .take(max).map { it.text.substringAfter(") : ", it.text) }
+
     private fun sourcesFooter(bibliography: String?, voice: Boolean) = bibliography?.let { if (voice) "" else "\n\nSources consultées :\n$it" }.orEmpty()
 
     private fun recordUsage(providerId: String, ctx: ConversationContext, output: String) {
@@ -387,8 +398,10 @@ class Orchestrator(
         return text to external
     }
 
-    private companion object {
-        val GUARDED = setOf(SpecialistId.COMICS, SpecialistId.RESEARCH)
+    companion object {
+        const val LESSON_TAG = "leçon"
+        const val GENERAL_LESSON = "général"
+        private val GUARDED = setOf(SpecialistId.COMICS, SpecialistId.RESEARCH)
     }
 
     internal fun parseReview(text: String): Pair<String, String> {
