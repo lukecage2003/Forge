@@ -79,6 +79,21 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
     val listState = rememberLazyListState()
     var pageToImport by remember { mutableStateOf<android.net.Uri?>(null) }
     var feedbackFor by remember { mutableStateOf<Int?>(null) }
+    var lastScript by remember { mutableStateOf<ai.forge.editorial.ViralScript?>(null) }
+    var motionStatus by remember { mutableStateOf<String?>(null) }
+    fun exportMotion(script: ai.forge.editorial.ViralScript) {
+        val spec = ai.forge.editorial.MotionSpec.fromScript(script)
+        container.scope.launch {
+            motionStatus = "Création de l'animation… 0 %"
+            motionStatus = runCatching {
+                val uri = ai.forge.app.motion.MotionExporter.export(context, spec, "forge-${System.currentTimeMillis()}") { p -> motionStatus = "Création de l'animation… ${(p * 100).toInt()} %" }
+                context.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND)
+                    .setType("video/mp4").putExtra(android.content.Intent.EXTRA_STREAM, uri).addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION), "Partager l'animation")
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                "Animation enregistrée dans Films/Forge (${spec.totalMs / 1000} s)."
+            }.getOrElse { "Échec de l'animation : ${it.message}" }
+        }
+    }
     val pagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> pageToImport = uri }
 
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -99,6 +114,7 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
         lines += ChatLine("Vous", text.trim())
         val idx = lines.size
         lines += ChatLine("Forge", "", request = text.trim())
+        lastScript = null; motionStatus = null
         scope.launch {
             listState.animateScrollToItem(lines.lastIndex)
             val buf = StringBuilder()
@@ -109,6 +125,7 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
                     is OrchestratorEvent.ActionResult -> if (e.outcome.status == ActionOutcome.Status.NEEDS_CONFIRMATION)
                         lines[idx] = lines[idx].copy(pendingAction = e.call)
                     is OrchestratorEvent.SecurityWarning -> lines += ChatLine("Sécurité", "Contenu externe suspect ignoré comme instruction (${e.source}).")
+                    is OrchestratorEvent.ScriptReady -> lastScript = e.script
                     is OrchestratorEvent.Planned -> lines[idx] = lines[idx].copy(specialist = e.intent.primary.name.lowercase())
                     is OrchestratorEvent.Token -> { buf.append(e.text); lines[idx] = lines[idx].copy(text = buf.toString()) }
                     is OrchestratorEvent.MemoryEvent -> lines += ChatLine("Mémoire", memoryLabel(e))
@@ -174,6 +191,9 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
                     itemsIndexed(lines) { i, l ->
                         Column(Modifier.animateItem(fadeInSpec = tween(250))) {
                                 Message(l, thinking = busy && i == lines.lastIndex && l.text.isEmpty())
+                                if (l.author == "Forge" && i == lines.lastIndex && !busy && lastScript != null) Row(Modifier.padding(top = 8.dp)) {
+                                    GlassPill(motionStatus ?: "Créer l'animation (MP4)", Icons.Default.Movie) { lastScript?.let { exportMotion(it) } }
+                                }
                                 if (l.author == "Forge" && l.text.isNotBlank() && !(busy && i == lines.lastIndex) && l.request != null && !l.rated)
                                     FeedbackRow(onGood = {
                                         container.recordFeedback(l.specialist ?: "conversation", l.request, l.text, ai.forge.evaluation.FeedbackKind.CORRECT, null)
