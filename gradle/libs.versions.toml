@@ -14,6 +14,7 @@ datastore = "1.1.7"
 mediapipeGenai = "0.10.24"
 playServicesAuth = "21.3.0"
 robolectric = "4.14.1"
+mlkitText = "16.0.1"
 androidxTestCore = "1.6.1"
 
 [libraries]
@@ -40,6 +41,7 @@ datastore-preferences = { module = "androidx.datastore:datastore-preferences", v
 mediapipe-genai = { module = "com.google.mediapipe:tasks-genai", version.ref = "mediapipeGenai" }
 play-services-auth = { module = "com.google.android.gms:play-services-auth", version.ref = "playServicesAuth" }
 
+mlkit-text = { module = "com.google.mlkit:text-recognition", version.ref = "mlkitText" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 androidx-test-core = { module = "androidx.test:core", version.ref = "androidxTestCore" }
 

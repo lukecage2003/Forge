@@ -104,3 +104,18 @@ class ResearchFlowTest {
         assertTrue(p.requests.first().messages.first().content.contains("Aucune recherche Web n'a pu être effectuée"))
     }
 }
+
+class LibraryFlowTest {
+    @Test fun comicsAnswerCitesRealLibraryReferences() = runTest {
+        val lib = LibraryTool { listOf(LibraryPassage("Black Panther #8 (2016), p. 2", "Mon costume absorbe l'énergie cinétique", verified = false)) }
+        val p = ScriptedProvider(capabilities = ProviderCapabilities(Locality.ON_DEVICE, 32_000, reasoningQuality = 5)) { req ->
+            if (req.messages.first().content.contains("VERDICT")) "VERDICT: OK\nPROBLEMES: aucun" else "Piste : [B1]."
+        }
+        val o = Orchestrator(ProviderRouter(listOf(p)), MemoryManager(InMemoryMemoryStore(), HashingEmbedder()), libraryTool = lib)
+        val ev = o.handle("Retrouve dans mes comics la preuve que le costume de Black Panther absorbe l'énergie", ConversationContext("l"), voice = false).toList()
+        assertEquals(1, ev.filterIsInstance<OrchestratorEvent.LibraryResults>().single().passages.size)
+        assertTrue(p.requests.any { r -> r.messages.first().content.contains("Black Panther #8 (2016), p. 2 (non vérifié)") })
+        val done = ev.filterIsInstance<OrchestratorEvent.Completed>().single().fullText
+        assertTrue(done.contains("[B1] Black Panther #8 (2016), p. 2 — piste OCR, page à consulter"), done)
+    }
+}

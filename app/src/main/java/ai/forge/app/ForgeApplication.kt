@@ -26,6 +26,8 @@ import ai.forge.reasoning.ActionPlanner
 import ai.forge.reasoning.ToolCallExecutor
 import ai.forge.reasoning.ResearchContext
 import ai.forge.reasoning.ResearchTool
+import ai.forge.app.library.LibraryRepository
+import ai.forge.app.library.MlKitOcrEngine
 import ai.forge.browser.BraveSearchProvider
 import ai.forge.browser.PageFetcher
 import ai.forge.browser.ResearchSession
@@ -81,6 +83,9 @@ class AppContainer(private val app: Application) {
     fun emergencyStop() { voice.stop(); actions.engageKillSwitch() }
 
     /** Pont entre l'orchestrateur et l'Action Engine : statuts réels, confirmation explicite. */
+    /** Bibliothèque personnelle (comics, documents) indexée sur l'appareil. */
+    val library = LibraryRepository(java.io.File(app.filesDir, "library"), MlKitOcrEngine())
+
     private val actionExecutor = ToolCallExecutor { call, confirmed ->
         if (confirmed) actions.confirm(call)
         val e = actions.run(call)
@@ -128,6 +133,7 @@ class AppContainer(private val app: Application) {
             actionPlanner = ActionPlanner { tools.specs() },
             actionExecutor = actionExecutor,
             researchTool = researchTool(),
+            libraryTool = library.tool(),
         )
     }
 

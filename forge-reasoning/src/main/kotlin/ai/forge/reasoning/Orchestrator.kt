@@ -48,6 +48,7 @@ sealed interface OrchestratorEvent {
     data class MemoryEvent(val outcome: RememberOutcome) : OrchestratorEvent
     /** Contenu externe contenant une tentative d'instruction : signalé, jamais exécuté. */
     data class SecurityWarning(val source: String, val findings: List<String>) : OrchestratorEvent
+    data class LibraryResults(val passages: List<LibraryPassage>) : OrchestratorEvent
     data class ResearchDone(val sourceCount: Int, val bibliography: String, val refused: Int) : OrchestratorEvent
     data class ActionProposed(val call: ToolCall) : OrchestratorEvent
     data class ActionResult(val call: ToolCall, val outcome: ActionOutcome) : OrchestratorEvent
@@ -73,6 +74,8 @@ class Orchestrator(
     private val actionExecutor: ToolCallExecutor? = null,
     /** Recherche Web (null = indisponible : Forge le dit, il ne simule pas de recherche). */
     private val researchTool: ResearchTool? = null,
+    /** Bibliothèque personnelle indexée (null = non configurée). */
+    private val libraryTool: LibraryTool? = null,
 ) {
     fun handle(input: String, ctx: ConversationContext, voice: Boolean, forcedDepth: ThinkingDepth? = null): Flow<OrchestratorEvent> = flow {
         // 1. Mémoire : uniquement ce que l'utilisateur veut explicitement conserver.
@@ -128,6 +131,26 @@ class Orchestrator(
                 researchNote = r.promptContext
                 bibliography = r.bibliography.takeIf { r.sourceCount > 0 }
             }.onFailure { researchNote = "La recherche Web a échoué (${it.message}) : signale-le et n'invente aucune source." }
+        }
+
+        // 3 ter. Bibliothèque personnelle (comics, documents) : passages localisés, jamais inventés.
+        if (intent.primary == SpecialistId.COMICS || intent.primary == SpecialistId.DOCUMENT) {
+            val lib = libraryTool
+            val passages = lib?.let { runCatching { it.search(input) }.getOrDefault(emptyList()) }.orEmpty()
+            if (lib != null) emit(OrchestratorEvent.LibraryResults(passages))
+            val libNote = when {
+                lib == null -> "La bibliothèque personnelle n'est pas indexée : ne cite aucune page ni aucun numéro comme s'ils venaient d'elle."
+                passages.isEmpty() -> "Aucun passage correspondant dans la bibliothèque indexée : dis-le, et n'invente aucune référence."
+                else -> buildString {
+                    appendLine("Passages trouvés dans la bibliothèque (texte OCR, à citer avec leur référence exacte ; « non vérifié » = l'utilisateur doit consulter la page) :")
+                    passages.forEachIndexed { i, p ->
+                        appendLine(UntrustedContent.wrap(p.reference, "[B${i + 1}] ${p.reference}${if (p.verified) "" else " (non vérifié)"} : ${p.excerpt}").text)
+                    }
+                }
+            }
+            researchNote = listOfNotNull(researchNote, libNote).joinToString("\n\n")
+            if (passages.isNotEmpty()) bibliography = listOfNotNull(bibliography, passages.mapIndexed { i, p ->
+                "[B${i + 1}] ${p.reference} — ${if (p.verified) "vérifié" else "piste OCR, page à consulter"}" }.joinToString("\n")).joinToString("\n")
         }
 
         // 4. Spécialistes de soutien (mode approfondi) : notes de travail internes.

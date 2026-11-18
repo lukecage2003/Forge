@@ -46,6 +46,7 @@ dependencies {
     implementation(project(":forge-actions"))
     implementation(project(":forge-academy"))
     implementation(project(":forge-browser"))
+    implementation(project(":forge-documents"))
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
@@ -67,6 +68,8 @@ dependencies {
     // Autorisation Google (OAuth, portée minimale) pour Google Drive.
     implementation(libs.play.services.auth)
     implementation(libs.kotlinx.coroutines.play.services)
+    // OCR sur l'appareil (alphabet latin, modèle embarqué : fonctionne hors-ligne).
+    implementation(libs.mlkit.text)
 
     testImplementation(kotlin("test"))
     testImplementation(libs.kotlinx.coroutines.test)
