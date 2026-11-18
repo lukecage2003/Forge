@@ -38,7 +38,7 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 
 
-data class ChatLine(val author: String, val text: String, val meta: String? = null)
+data class ChatLine(val author: String, val text: String, val meta: String? = null, val pendingAction: ai.forge.security.ToolCall? = null)
 
 @Composable
 fun ForgeApp(container: AppContainer) {
@@ -95,6 +95,8 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
             val buf = StringBuilder()
             container.orchestrator.handle(text, container.conversation, voice = false).collect { e ->
                 when (e) {
+                    is OrchestratorEvent.ActionResult -> if (e.outcome.status == ai.forge.reasoning.ActionOutcome.Status.NEEDS_CONFIRMATION)
+                        lines[idx] = lines[idx].copy(pendingAction = e.call)
                     is OrchestratorEvent.SecurityWarning -> lines += ChatLine("Sécurité", "Contenu externe suspect ignoré comme instruction (${e.source}) : ${e.findings.joinToString()}")
                     is OrchestratorEvent.Planned -> lines[idx] = lines[idx].copy(meta = "${e.intent.primary.name.lowercase()} · ${e.intent.depth.label} · ${e.provider}")
                     is OrchestratorEvent.Token -> { buf.append(e.text); lines[idx] = lines[idx].copy(text = buf.toString()) }
@@ -124,7 +126,19 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
         Column(Modifier.padding(pad).fillMaxSize()) {
             VoiceIndicator(container, voiceOn, partial, voiceError, container.settings.showTranscript)
             LazyColumn(Modifier.weight(1f).padding(horizontal = 12.dp), state = listState) {
-                items(lines) { l -> MessageBubble(l) }
+                items(lines.size) { i ->
+                    val l = lines[i]
+                    MessageBubble(l)
+                    l.pendingAction?.let { call ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = {
+                                lines[i] = l.copy(pendingAction = null)
+                                scope.launch { lines += ChatLine("Forge", container.orchestrator.executeConfirmed(call, container.conversation)) }
+                            }) { Text("Confirmer") }
+                            OutlinedButton(onClick = { lines[i] = l.copy(pendingAction = null); lines += ChatLine("Forge", "Action annulée, rien n'a été exécuté.") }) { Text("Annuler") }
+                        }
+                    }
+                }
             }
             Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(input, { input = it }, Modifier.weight(1f), placeholder = { Text("Parlez à Forge…") }, maxLines = 5)

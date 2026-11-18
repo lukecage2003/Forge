@@ -39,11 +39,12 @@ class IntentAnalyzer {
         Rule(SpecialistId.MEMORY, r("\\btu te souviens\\b", "\\bje t'avais dit\\b", "\\bla derniere fois\\b",
             "\\bqu'est-ce que tu sais sur moi\\b", "\\bmes souvenirs\\b")),
         Rule(SpecialistId.ANDROID_ACTION, r("\\b(mets|programme|regle)\\b.*\\b(alarme|reveil|minuteur|rappel)\\b",
-            "\\bouvre l'application\\b", "\\bajoute\\b.*\\bagenda\\b", "\\benvoie\\b.*\\b(sms|message)\\b", "\\bappelle\\b")),
+            "\\bouvre l'application\\b", "\\breveille[- ]moi\\b", "\\b(cree|prepare)\\b.*\\b(rappel|evenement)\\b", "\\bajoute\\b.*\\bagenda\\b", "\\benvoie\\b.*\\b(sms|message)\\b", "\\bappelle\\b", "^(partage|envoie)\\b")),
         Rule(SpecialistId.REASONING, r("\\banalyse\\b", "\\bpourquoi\\b.*\\b(exactement|vraiment)\\b",
             "\\bdemontre\\b", "\\bprobleme\\b", "\\bstrategie\\b", "\\bcalcule\\b", "\\braisonne")),
     )
 
+    private val imperativeAction = Regex("^(forge[, ]+)?(mets|programme|regle|reveille|partage|envoie|ouvre|ajoute|cree|prepare|appelle|lance)\\b")
     private val deepCues = Regex("\\b(en profondeur|approfondi|deep research|dossier complet|exhaustif|en detail)\\b")
     private val quickCues = Regex("\\b(rapidement|en bref|vite fait|en une phrase)\\b")
 
@@ -59,7 +60,10 @@ class IntentAnalyzer {
                 ThinkingDepth.INSTANT,
                 needsVerification = false, signals = listOf("conversation libre"))
         }
-        val primary = scored.first().first
+        // Une phrase qui commence par un verbe d'action à l'impératif est une demande d'action,
+        // même si elle mentionne un sujet éditorial (« partage mon script… »).
+        val actionFirst = imperativeAction.containsMatchIn(t) && scored.any { it.first == SpecialistId.ANDROID_ACTION }
+        val primary = if (actionFirst) SpecialistId.ANDROID_ACTION else scored.first().first
         val supporting = scored.drop(1).map { it.first }.filter { it != primary }.take(2)
         var depth = when (primary) {
             SpecialistId.COMICS, SpecialistId.RESEARCH -> ThinkingDepth.DEEP_RESEARCH

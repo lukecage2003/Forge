@@ -21,6 +21,10 @@ import ai.forge.memory.HashingEmbedder
 import ai.forge.memory.MemoryManager
 import ai.forge.reasoning.ConversationContext
 import ai.forge.reasoning.Orchestrator
+import ai.forge.reasoning.ActionOutcome
+import ai.forge.reasoning.ActionPlanner
+import ai.forge.reasoning.ToolCallExecutor
+import ai.forge.actions.ActionStatus
 import ai.forge.actions.ActionEngine
 import ai.forge.models.UsageLimits
 import ai.forge.models.UsageMeter
@@ -69,6 +73,20 @@ class AppContainer(private val app: Application) {
     /** Arrêt d'urgence global : voix ET actions. */
     fun emergencyStop() { voice.stop(); actions.engageKillSwitch() }
 
+    /** Pont entre l'orchestrateur et l'Action Engine : statuts réels, confirmation explicite. */
+    private val actionExecutor = ToolCallExecutor { call, confirmed ->
+        if (confirmed) actions.confirm(call)
+        val e = actions.run(call)
+        val status = when (e.status) {
+            ActionStatus.SUCCEEDED -> ActionOutcome.Status.DONE
+            ActionStatus.AWAITING_CONFIRMATION -> ActionOutcome.Status.NEEDS_CONFIRMATION
+            ActionStatus.DENIED -> ActionOutcome.Status.DENIED
+            ActionStatus.BLOCKED_BY_KILL_SWITCH -> ActionOutcome.Status.BLOCKED
+            else -> ActionOutcome.Status.FAILED
+        }
+        ActionOutcome(status, e.outcome)
+    }
+
     var conversation = ConversationContext(UUID.randomUUID().toString())
         private set
 
@@ -100,6 +118,8 @@ class AppContainer(private val app: Application) {
         return Orchestrator(
             ProviderRouter(providers(), RoutingPolicy(localOnly = settings.localOnly, networkAvailable = networkAvailable.value), egress(), usage),
             memory,
+            actionPlanner = ActionPlanner { tools.specs() },
+            actionExecutor = actionExecutor,
         )
     }
 

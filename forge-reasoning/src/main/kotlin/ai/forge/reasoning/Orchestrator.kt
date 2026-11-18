@@ -23,6 +23,7 @@ import ai.forge.core.model.Role
 import ai.forge.core.model.ThinkingDepth
 import ai.forge.core.persona.ForgePersona
 import ai.forge.security.UntrustedContent
+import ai.forge.security.ToolCall
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
@@ -47,6 +48,8 @@ sealed interface OrchestratorEvent {
     data class MemoryEvent(val outcome: RememberOutcome) : OrchestratorEvent
     /** Contenu externe contenant une tentative d'instruction : signalé, jamais exécuté. */
     data class SecurityWarning(val source: String, val findings: List<String>) : OrchestratorEvent
+    data class ActionProposed(val call: ToolCall) : OrchestratorEvent
+    data class ActionResult(val call: ToolCall, val outcome: ActionOutcome) : OrchestratorEvent
     data class Completed(val fullText: String) : OrchestratorEvent
     data class Failed(val reason: String) : OrchestratorEvent
 }
@@ -64,6 +67,9 @@ class Orchestrator(
     private val memory: MemoryManager,
     private val analyzer: IntentAnalyzer = IntentAnalyzer(),
     private val extractor: MemoryCandidateExtractor = MemoryCandidateExtractor(),
+    /** Actions Android : null = aucune action possible (Forge le dit au lieu de faire semblant). */
+    private val actionPlanner: ActionPlanner? = null,
+    private val actionExecutor: ToolCallExecutor? = null,
 ) {
     fun handle(input: String, ctx: ConversationContext, voice: Boolean, forcedDepth: ThinkingDepth? = null): Flow<OrchestratorEvent> = flow {
         // 1. Mémoire : uniquement ce que l'utilisateur veut explicitement conserver.
@@ -72,6 +78,16 @@ class Orchestrator(
         // 2. Intention et profondeur.
         val intent = analyzer.analyze(input).let { if (forcedDepth != null) it.copy(depth = forcedDepth, needsVerification = forcedDepth.verify) else it }
         val primary = Specialists[intent.primary]
+
+        // Actions Android (§11) : planifier → portail d'autorisation → résultat réel.
+        if (intent.primary == SpecialistId.ANDROID_ACTION) {
+            ctx.add(ChatMessage(Role.USER, input))
+            val text = handleAction(input, intent) { emit(it) }
+            ctx.add(ChatMessage(Role.ASSISTANT, text))
+            emit(OrchestratorEvent.Token(text))
+            emit(OrchestratorEvent.Completed(text))
+            return@flow
+        }
 
         // 3. Rappel mémoire ciblé, AVANT le choix du moteur : le contenu décide de qui peut le recevoir.
         val hits = if (primary.memoryKinds.isEmpty()) emptyList()
@@ -160,6 +176,30 @@ class Orchestrator(
             addAll(ctx.turns)
         }
         return ChatRequest(msgs, temperature = spec.temperature, maxTokens = if (voice) 600 else 2_000)
+    }
+
+    private suspend fun handleAction(input: String, intent: Intent, emit: suspend (OrchestratorEvent) -> Unit): String {
+        val planner = actionPlanner; val executor = actionExecutor
+        if (planner == null || executor == null) return "Je ne peux pas agir sur le téléphone dans cette configuration : aucune action n'a été exécutée."
+        val provider = router.select(RoutingNeeds(ThinkingDepth.STANDARD, task = TaskCategory.ACTIONS, dataClass = DataClass.GENERAL))
+        return when (val plan = planner.plan(input, provider)) {
+            is ActionPlanner.Plan.Clarify -> plan.question
+            is ActionPlanner.Plan.Unparseable -> "Je n'ai pas compris l'action demandée ; rien n'a été exécuté. Pouvez-vous la reformuler ?"
+            is ActionPlanner.Plan.Call -> {
+                emit(OrchestratorEvent.ActionProposed(plan.call))
+                val outcome = executor.execute(plan.call, confirmed = false)
+                emit(OrchestratorEvent.ActionResult(plan.call, outcome))
+                ActionPlanner.report(plan.call, outcome)
+            }
+        }
+    }
+
+    /** Exécute une action après confirmation explicite de l'utilisateur (bouton « Confirmer »). */
+    suspend fun executeConfirmed(call: ToolCall, ctx: ConversationContext): String {
+        val executor = actionExecutor ?: return "Aucun moteur d'actions disponible."
+        val text = ActionPlanner.report(call, executor.execute(call, confirmed = true))
+        ctx.add(ChatMessage(Role.ASSISTANT, text))
+        return text
     }
 
     private fun recordUsage(providerId: String, ctx: ConversationContext, output: String) {

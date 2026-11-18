@@ -1,0 +1,83 @@
+package ai.forge.reasoning
+
+import ai.forge.core.model.AutonomyLevel
+import ai.forge.memory.*
+import ai.forge.models.*
+import ai.forge.security.*
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonPrimitive
+import kotlin.test.*
+
+class ActionFlowTest {
+    private val specs = listOf(
+        ToolSpec("android.alarm", "Programme un réveil (hour, minute, label).", AutonomyLevel.L2_REVERSIBLE, true),
+        ToolSpec("android.share", "Partage un texte (text).", AutonomyLevel.L1_PROPOSE, true, externalEffect = true),
+    )
+    private val planner = ActionPlanner { specs }
+    private fun memory() = MemoryManager(InMemoryMemoryStore(), HashingEmbedder())
+
+    /** Exécuteur de test qui reproduit les décisions du vrai portail. */
+    private class GateExecutor(specs: List<ToolSpec>) : ToolCallExecutor {
+        val gate = PermissionGate(AutonomyLevel.L2_REVERSIBLE)
+        val byName = specs.associateBy { it.name }
+        val executed = mutableListOf<ToolCall>()
+        override suspend fun execute(call: ToolCall, confirmed: Boolean): ActionOutcome {
+            if (confirmed) gate.confirmOnce(call)
+            return when (val d = gate.evaluate(byName.getValue(call.tool), call)) {
+                PermissionGate.Decision.Allow -> { executed += call; ActionOutcome(ActionOutcome.Status.DONE, "réveil transmis à l'Horloge") }
+                is PermissionGate.Decision.Ask -> ActionOutcome(ActionOutcome.Status.NEEDS_CONFIRMATION, d.reason)
+                is PermissionGate.Decision.Deny -> ActionOutcome(ActionOutcome.Status.DENIED, d.reason)
+            }
+        }
+    }
+
+    @Test fun quickParseHandlesCommonFrenchAlarmPhrasings() {
+        val c = planner.quickParse("Mets un réveil à 7h30 pour la vidéo")!!
+        assertEquals(7, c.arguments["hour"]!!.jsonPrimitive.int); assertEquals(30, c.arguments["minute"]!!.jsonPrimitive.int)
+        assertEquals("la video", c.arguments["label"]!!.jsonPrimitive.content)
+        assertEquals(6, planner.quickParse("Réveille-moi à 6 h")!!.arguments["hour"]!!.jsonPrimitive.int)
+        assertNull(planner.quickParse("Mets un réveil à 25h"))
+        assertNull(planner.quickParse("Parle-moi de Superman"))
+    }
+
+    @Test fun parsesModelJsonAndRejectsUnknownTools() {
+        val ok = planner.parse("Voici : {\"tool\": \"android.share\", \"arguments\": {\"text\": \"Salut\"}, \"rationale\": \"partage\"} fin")
+        assertIs<ActionPlanner.Plan.Call>(ok)
+        assertIs<ActionPlanner.Plan.Clarify>(planner.parse("{\"tool\": \"android.delete_all\"}"))
+        assertIs<ActionPlanner.Plan.Clarify>(planner.parse("{\"tool\": null, \"question\": \"À quelle heure ?\"}"))
+        assertIs<ActionPlanner.Plan.Unparseable>(planner.parse("je ne sais pas"))
+    }
+
+    @Test fun scenarioG_alarmIsExecutedThroughGateAndReportedFromRealOutcome() = runTest {
+        val exec = GateExecutor(specs)
+        val o = Orchestrator(ProviderRouter(listOf(ScriptedProvider { "ne doit pas servir" })), memory(), actionPlanner = planner, actionExecutor = exec)
+        val ev = o.handle("Mets une alarme à 7h", ConversationContext("g"), voice = true).toList()
+        val result = ev.filterIsInstance<OrchestratorEvent.ActionResult>().single()
+        assertEquals(ActionOutcome.Status.DONE, result.outcome.status)
+        assertEquals(1, exec.executed.size)
+        assertTrue(ev.filterIsInstance<OrchestratorEvent.Completed>().single().fullText.startsWith("C'est transmis"))
+    }
+
+    @Test fun externalEffectNeedsConfirmationThenRunsOnce() = runTest {
+        val exec = GateExecutor(specs)
+        val provider = ScriptedProvider { "{\"tool\": \"android.share\", \"arguments\": {\"text\": \"Mon script\"}, \"rationale\": \"partage demandé\"}" }
+        val o = Orchestrator(ProviderRouter(listOf(provider)), memory(), actionPlanner = planner, actionExecutor = exec)
+        val ctx = ConversationContext("g2")
+        val ev = o.handle("Partage mon script avec l'application de messages, envoie le message", ctx, voice = false).toList()
+        val r = ev.filterIsInstance<OrchestratorEvent.ActionResult>().singleOrNull()
+            ?: fail("Pas d'action : ${ev}")
+        assertEquals(ActionOutcome.Status.NEEDS_CONFIRMATION, r.outcome.status)
+        assertTrue(exec.executed.isEmpty())
+        assertTrue(o.executeConfirmed(r.call, ctx).startsWith("C'est transmis"))
+        assertEquals(1, exec.executed.size)
+    }
+
+    @Test fun withoutExecutorForgeSaysNothingWasDone() = runTest {
+        val o = Orchestrator(ProviderRouter(listOf(ScriptedProvider { "" })), memory())
+        val done = o.handle("Mets une alarme à 7h", ConversationContext("g3"), voice = false).toList()
+            .filterIsInstance<OrchestratorEvent.Completed>().single()
+        assertTrue(done.fullText.contains("aucune action n'a été exécutée"))
+    }
+}
