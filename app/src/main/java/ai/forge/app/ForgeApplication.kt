@@ -92,6 +92,8 @@ class AppContainer(val app: Application) {
     val actions = ActionEngine(tools, gate)
     val usage = UsageMeter()
     val networkAvailable = MutableStateFlow(true)
+    /** Ouverture par le bouton latéral / l'assistant : l'écran de conversation démarre l'écoute. */
+    val voiceRequested = MutableStateFlow(false)
 
     /** Arrêt d'urgence global : voix ET actions. */
     fun emergencyStop() { voice.stop(); actions.engageKillSwitch() }

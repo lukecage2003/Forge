@@ -122,6 +122,11 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
         } else micPermission.launch(Manifest.permission.RECORD_AUDIO)
     }
 
+    val voiceRequested by container.voiceRequested.collectAsState()
+    LaunchedEffect(voiceRequested) {
+        if (voiceRequested) { container.voiceRequested.value = false; if (!voiceOn) toggleVoice() }
+    }
+
     fun send(text: String) {
         if (text.isBlank() || busy) return
         val image = attached; attached = null

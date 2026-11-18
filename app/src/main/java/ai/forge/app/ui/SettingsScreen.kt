@@ -151,6 +151,18 @@ fun SettingsScreen(container: AppContainer) {
         }
 
         item {
+            Section("Assistant du téléphone") {
+                Hint("Faites de Forge l'assistant numérique : un appui long sur le bouton latéral l'ouvre directement en écoute, même écran verrouillé.")
+                Hint("1. Touchez le bouton ci-dessous → Assistant numérique → Forge.  2. Paramètres → Fonctions avancées → Touche latérale → Appui prolongé → Assistant numérique.")
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                GlassPill("Choisir Forge comme assistant") {
+                    runCatching { ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                        .onFailure { ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_VOICE_INPUT_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                }
+            }
+        }
+
+        item {
             Section("Voix") {
                 VoicePicker(container, s.voiceName, s.networkVoices, onPick = { s = s.copy(voiceName = it) }, onNetwork = { s = s.copy(networkVoices = it) })
                 Text("Vitesse de parole : ${"%.2f".format(s.speechRate)}", color = ForgePalette.Text)
