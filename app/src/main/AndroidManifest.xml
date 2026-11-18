@@ -13,6 +13,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Bulle Forge par-dessus les applications (accordée par l'utilisateur dans les réglages). -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Veille « Forge » : demander à ne pas être endormi par l'optimisation de batterie. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Action « réveil » (niveau 2, réversible). -->
@@ -90,6 +91,17 @@
             tools:node="merge">
             <meta-data android:name="androidx.work.WorkManagerInitializer" android:value="androidx.startup" tools:node="remove" />
         </provider>
+        <!-- Réveil écran éteint : bulle par-dessus l'écran de verrouillage. -->
+        <activity
+            android:name=".island.WakeActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:taskAffinity="ai.forge.app.wake"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- Tuile des réglages rapides : un toucher, Forge écoute. -->
         <service
             android:name=".shortcut.ForgeTileService"

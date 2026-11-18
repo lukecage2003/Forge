@@ -35,6 +35,7 @@ class VoiceSessionService : LifecycleService() {
     private var inTurn = false
     private var appVisible = true
     private var lingering = false
+    private var wakeLock: android.os.PowerManager.WakeLock? = null
     private var lingerJob: kotlinx.coroutines.Job? = null
 
     private val visibility = object : DefaultLifecycleObserver {
@@ -46,6 +47,7 @@ class VoiceSessionService : LifecycleService() {
         super.onCreate()
         ProcessLifecycleOwner.get().lifecycle.addObserver(visibility)
         overlay = IslandOverlay(this, this, container).also { it.onDismiss = { endTurnEarly() } }
+        container.onEndWakeTurn = { endTurnEarly() }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -75,16 +77,35 @@ class VoiceSessionService : LifecycleService() {
         val w = wake ?: VoskWakeWord(dir, WakeWordSpotter(container.settings.wakeStrictness), onWake = { onWake() },
             onError = { container.voice.lastError.value = it }).also { wake = it }
         w.start()
+        holdCpu(container.settings.wakeScreenOff)
+    }
+
+    /** Écran éteint, Android endort le processeur : la veille le garde éveillé si l'utilisateur l'a choisi. */
+    private fun holdCpu(on: Boolean) {
+        if (on && wakeLock?.isHeld != true) wakeLock = getSystemService(android.os.PowerManager::class.java)
+            .newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "forge:veille").apply { setReferenceCounted(false); acquire() }
+        if (!on) { wakeLock?.takeIf { it.isHeld }?.release(); wakeLock = null }
+    }
+
+    /** Téléphone verrouillé ou écran éteint : la bulle s'affiche par-dessus l'écran de verrouillage. */
+    private fun showOverLockScreen() {
+        val pm = getSystemService(android.os.PowerManager::class.java)
+        val km = getSystemService(android.app.KeyguardManager::class.java)
+        if (pm.isInteractive && !km.isKeyguardLocked) return
+        runCatching { startActivity(Intent(this, ai.forge.app.island.WakeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     }
 
     private fun onWake() {
         lingerJob?.cancel(); lingering = false
         inTurn = true
+        container.wakeTurnActive.value = true
+        showOverLockScreen()
         runCatching { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 35).startTone(ToneGenerator.TONE_PROP_ACK, 120) }
         overlay?.expanded?.value = true
         updateIsland()
         container.voice.startTurn(onEnded = {
             inTurn = false
+            container.wakeTurnActive.value = false
             if (standby) startWake() else { shutdown(); return@startTurn }
             // La fin de la réponse reste lisible un instant, puis la bulle se retire.
             lingerJob?.cancel()
@@ -98,6 +119,7 @@ class VoiceSessionService : LifecycleService() {
 
     private fun endTurnEarly() {
         lingerJob?.cancel(); lingering = false
+        container.wakeTurnActive.value = false
         if (!inTurn) { updateIsland(); return }
         container.voice.stop(); inTurn = false
         overlay?.expanded?.value = false
@@ -117,6 +139,8 @@ class VoiceSessionService : LifecycleService() {
 
     private fun shutdown() {
         standby = false; inTurn = false
+        container.wakeTurnActive.value = false
+        holdCpu(false)
         wake?.release(); wake = null
         container.voice.stop()
         overlay?.hide()

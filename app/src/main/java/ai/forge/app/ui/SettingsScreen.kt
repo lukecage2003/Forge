@@ -180,6 +180,12 @@ fun SettingsScreen(container: AppContainer) {
                 }
 
                 Text("Dites « Forge »", style = MaterialTheme.typography.titleMedium, color = ForgePalette.Text)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) { Text("Aussi écran éteint", color = ForgePalette.Text)
+                        Hint("Forge reste à l'écoute téléphone verrouillé et allume l'écran quand il entend « Forge ». Consomme nettement plus de batterie. " +
+                            "Attention : toute personne proche peut alors lui poser une question ; vos actions sensibles demandent toujours confirmation.") }
+                    Switch(s.wakeScreenOff, { s = s.copy(wakeScreenOff = it) }, colors = switchColors)
+                }
                 Hint("Détecteur hors-ligne (Vosk, 42 Mo) : il n'écoute que le mot « Forge », rien ne quitte le téléphone. Fonctionne écran allumé, dans n'importe quelle application ; une notification indique que le micro est actif.")
                 if (!wakeReady) GlassPill("Installer le mot d'appel") { container.installWakeWord { wakeReady = true } }
                 else Row(verticalAlignment = Alignment.CenterVertically) {

@@ -209,6 +209,12 @@ class AppContainer(val app: Application) {
         ExternalProviderGrant(it, settings.cloudTasks, settings.cloudMaxDataClass)
     })
 
+    /** Vrai pendant un tour lancé par « Forge » (écran de réveil affiché tant qu'il dure). */
+    val wakeTurnActive = MutableStateFlow(false)
+    /** Fermeture demandée depuis l'écran de réveil. */
+    @Volatile var onEndWakeTurn: () -> Unit = {}
+    fun endWakeTurn() = onEndWakeTurn()
+
     /** Mesures réelles des derniers tours (diagnostic de vitesse). */
     val turnMetrics = MutableStateFlow<List<ai.forge.reasoning.TurnMetrics>>(emptyList())
 
