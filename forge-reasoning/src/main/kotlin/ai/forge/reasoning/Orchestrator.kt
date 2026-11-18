@@ -51,6 +51,7 @@ sealed interface OrchestratorEvent {
     data class SecurityWarning(val source: String, val findings: List<String>) : OrchestratorEvent
     data class ScriptReady(val script: ai.forge.editorial.ViralScript, val checks: List<ai.forge.editorial.RetentionCheck>, val revised: Boolean) : OrchestratorEvent
     data class LibraryResults(val passages: List<LibraryPassage>) : OrchestratorEvent
+    data class ResearchStarted(val query: String) : OrchestratorEvent
     data class ResearchDone(val sourceCount: Int, val bibliography: String, val refused: Int) : OrchestratorEvent
     data class ActionProposed(val call: ToolCall) : OrchestratorEvent
     data class ActionResult(val call: ToolCall, val outcome: ActionOutcome) : OrchestratorEvent
@@ -134,11 +135,12 @@ class Orchestrator(
             emit(OrchestratorEvent.Failed("Aucun moteur disponible pour cette demande (${dataClass.label}). Détail : ${router.explain(needs)}"))
             return@flow
         }
-        // Sur un modèle embarqué, chaque passe coûte plusieurs secondes : une seule passe diffusée
-        // immédiatement, sauf là où le contrôle protège contre l'invention (comics, éditorial, recherche).
+        // Sur un modèle embarqué, chaque passe coûte de nombreuses secondes et rien ne s'affiche avant
+        // la fin : une seule passe diffusée immédiatement, suivie d'un contrôle déterministe des
+        // citations (instantané). La relecture par le modèle reste disponible en profondeur forcée.
         val onDevice = provider.capabilities.locality == Locality.ON_DEVICE
         // À l'oral, la réponse doit venir vite : jamais de seconde passe de contrôle.
-        val verify = !voice && intent.needsVerification && (!onDevice || intent.primary in GUARDED)
+        val verify = !voice && intent.needsVerification && (!onDevice || forcedDepth != null)
         val steps = buildList {
             if (intent.depth >= ThinkingDepth.DEEP_RESEARCH && !onDevice) addAll(intent.supporting)
             add(intent.primary)
@@ -160,7 +162,7 @@ class Orchestrator(
         if (wantsResearch && (!voice || intent.primary == SpecialistId.RESEARCH) && (researchTool != null || intent.primary == SpecialistId.RESEARCH)) {
             val tool = researchTool
             if (tool == null) researchNote = "Aucune recherche Web n'a pu être effectuée (outil indisponible ou hors-ligne) : réponds avec tes connaissances en le signalant clairement, sans inventer de source."
-            else runCatching { tool.research(input) }.onSuccess { r ->
+            else runCatching { emit(OrchestratorEvent.ResearchStarted(input)); tool.research(input) }.onSuccess { r ->
                 emit(OrchestratorEvent.ResearchDone(r.sourceCount, r.bibliography, r.refusedCount))
                 if (r.suspiciousCount > 0) emit(OrchestratorEvent.SecurityWarning("recherche Web", listOf("${r.suspiciousCount} page(s) contenant des tentatives d'instruction")))
                 researchNote = r.promptContext
@@ -244,6 +246,9 @@ class Orchestrator(
                 }
             }
             failed?.let { emit(OrchestratorEvent.Failed(it)); return@flow }
+            if (!voice && intent.primary in GUARDED) citationWarning(text.toString(), researchCitations.size, libraryPassages.size)?.let {
+                text.append(it); emit(OrchestratorEvent.Token(it))
+            }
             if (sourcesFooter.isNotEmpty()) { text.append(sourcesFooter); emit(OrchestratorEvent.Token(sourcesFooter)) }
             ctx.add(ChatMessage(Role.ASSISTANT, text.toString()))
             recordUsage(provider.id, ctx, text.toString())
@@ -275,6 +280,18 @@ class Orchestrator(
         ctx.add(ChatMessage(Role.ASSISTANT, finalWithSources))
         recordUsage(provider.id, ctx, draft + review + final)
         emit(OrchestratorEvent.Completed(finalWithSources))
+    }
+
+    /**
+     * Contrôle instantané (sans repasser par le modèle) : une citation [n] ou [Bn] qui ne
+     * correspond à aucune source consultée est signalée, au lieu d'être présentée comme vérifiée.
+     */
+    internal fun citationWarning(answer: String, webSources: Int, libraryPassages: Int): String? {
+        val web = Regex("\\[(\\d{1,2})]").findAll(answer).map { it.groupValues[1].toInt() }.filter { it !in 1..webSources }.toSet()
+        val lib = Regex("\\[B(\\d{1,2})]").findAll(answer).map { it.groupValues[1].toInt() }.filter { it !in 1..libraryPassages }.toSet()
+        if (web.isEmpty() && lib.isEmpty()) return null
+        val refs = (web.sorted().map { "[$it]" } + lib.sorted().map { "[B$it]" }).joinToString(", ")
+        return "\n\n⚠️ Contrôle des sources : $refs ne correspond à aucune source consultée — à considérer comme non vérifié."
     }
 
     @Volatile private var attachedImages: List<ByteArray> = emptyList()

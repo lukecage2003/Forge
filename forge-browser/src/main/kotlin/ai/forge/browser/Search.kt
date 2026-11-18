@@ -11,7 +11,11 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
-data class SearchResult(val url: String, val title: String, val snippet: String)
+/**
+ * Résultat de recherche. [content] : texte de l'article déjà fourni par l'API (wikis) — la page
+ * n'a alors pas besoin d'être téléchargée, ce qui économise un aller-retour complet.
+ */
+data class SearchResult(val url: String, val title: String, val snippet: String, val content: String? = null)
 
 /**
  * Fournisseur de recherche Web interchangeable (§6, §13.3). La requête quitte l'appareil :
@@ -29,7 +33,7 @@ interface SearchProvider {
 /** SearXNG (méta-moteur libre, auto-hébergeable) — API JSON : /search?format=json. */
 class SearxngSearchProvider(
     private val baseUrl: String,
-    private val client: OkHttpClient = OkHttpClient(),
+    private val client: OkHttpClient = ForgeHttp.client,
     override val thirdParty: Boolean = false,
 ) : SearchProvider {
     override val id = "searxng"
@@ -53,7 +57,7 @@ class SearxngSearchProvider(
 /** Brave Search API (clé fournie par l'utilisateur). */
 class BraveSearchProvider(
     private val apiKey: String,
-    private val client: OkHttpClient = OkHttpClient(),
+    private val client: OkHttpClient = ForgeHttp.client,
     private val baseUrl: String = "https://api.search.brave.com",
 ) : SearchProvider {
     override val id = "brave"

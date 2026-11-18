@@ -7,7 +7,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
-import java.util.concurrent.TimeUnit
 
 data class FetchedPage(
     val url: String,
@@ -30,12 +29,12 @@ sealed interface FetchResult {
  * - taille plafonnée, types HTML/texte uniquement, schémas http(s) et hôtes publics uniquement.
  */
 class PageFetcher(
-    private val client: OkHttpClient = OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS).readTimeout(20, TimeUnit.SECONDS).build(),
-    private val maxBytes: Long = 2_000_000,
+    private val client: OkHttpClient = ForgeHttp.client,
+    private val maxBytes: Long = 800_000,
     private val userAgent: String = "ForgeAssistant/0.2 (assistant personnel; respecte robots.txt)",
     private val allowPrivateHosts: Boolean = false,
 ) {
-    private val robotsCache = mutableMapOf<String, RobotsRules>()
+    private val robotsCache = java.util.concurrent.ConcurrentHashMap<String, RobotsRules>()
 
     suspend fun fetch(rawUrl: String): FetchResult = withContext(Dispatchers.IO) {
         val url = rawUrl.toHttpUrlOrNull() ?: return@withContext FetchResult.Refused("URL invalide")

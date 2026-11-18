@@ -151,6 +151,7 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
             val (imgs, imgText) = if (image != null) prepareImage(context, container, image) else (emptyList<ByteArray>() to null)
             container.orchestrator.handle(text, container.conversation, voice = false, images = imgs, imageText = imgText).collect { e ->
                 when (e) {
+                    is OrchestratorEvent.ResearchStarted -> lines[idx] = lines[idx].copy(meta = "Recherche sur le Web…")
                     is OrchestratorEvent.ResearchDone -> lines[idx] = lines[idx].copy(meta = "${e.sourceCount} source(s) consultée(s)")
                     is OrchestratorEvent.LibraryResults -> lines[idx] = lines[idx].copy(meta = "${e.passages.size} passage(s) trouvé(s) dans vos comics")
                     is OrchestratorEvent.ActionResult -> if (e.outcome.status == ActionOutcome.Status.NEEDS_CONFIRMATION)

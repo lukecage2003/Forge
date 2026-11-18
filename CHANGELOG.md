@@ -1,5 +1,20 @@
 # Historique des versions
 
+## 0.8.1 — 18/11/2026
+- **Recherches beaucoup plus rapides** :
+  - Wikipédia et les wikis Marvel/DC renvoient le texte des articles dans la même requête que la
+    recherche (un seul aller-retour, au lieu de télécharger robots.txt puis des pages HTML de 1 à 2 Mo) ;
+  - la phrase parlée est réduite à ses mots-clés (« Forge, tu peux me chercher qui a créé Black
+    Panther ? » → « créé Black Panther ») : moins de recherches vides ;
+  - pages des autres sites téléchargées en parallèle dans un budget de 4 s : une page lente est
+    abandonnée au lieu de bloquer la réponse ;
+  - connexions réutilisées (client HTTP partagé, délais courts) ; résultats gardés 20 min ;
+  - 3 sources plus courtes : moins de texte à relire pour le modèle embarqué.
+- **Réponses comics et recherche diffusées immédiatement** sur le téléphone : la relecture par le
+  modèle (2 à 3 générations complètes avant d'afficher quoi que ce soit) est remplacée par un
+  contrôle instantané des citations (une source [n] inexistante est signalée).
+- Indicateur « Recherche sur le Web… » pendant la recherche.
+
 ## 0.8.0 — 18/11/2026
 - **Bulle Forge** façon île dynamique : capsule noire autour de la caméra, par-dessus les
   applications ; s'élargit quand vous parlez (onde dorée qui suit votre voix, transcription en

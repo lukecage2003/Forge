@@ -5,9 +5,12 @@ import ai.forge.research.Corroboration
 import ai.forge.research.SourceClassifier
 import ai.forge.research.SourceType
 import ai.forge.security.UntrustedContent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 
 /** Source consultée et prête à être citée. */
@@ -36,14 +39,38 @@ class ResearchSession(
     private val classifier: SourceClassifier = SourceClassifier(),
     private val today: () -> LocalDate = LocalDate::now,
     private val history: MutableList<String> = mutableListOf(),
+    /** Temps maximal accordé aux pages à télécharger : au-delà, on répond avec ce qu'on a. */
+    private val fetchBudgetMs: Long = 4_000,
+    private val cacheTtlMs: Long = 20 * 60_000,
+    private val clock: () -> Long = System::currentTimeMillis,
 ) {
     val searchHistory: List<String> get() = history
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, ResearchDossier>>()
+    /**
+     * Téléchargements détachés de la réponse : une page trop lente est abandonnée sans que la
+     * réponse attende la fin de sa connexion (un appel réseau bloquant ne s'interrompt pas tout seul).
+     */
+    private val fetchScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     suspend fun run(query: String, maxSources: Int = 5, excerptChars: Int = 2_500, recentTopic: Boolean = false, requiresPrimary: Boolean = false): ResearchDossier = coroutineScope {
         history += query
-        val results = search.search(query, limit = maxSources * 2)
+        val keywords = QueryRewriter.keywords(query)
+        val key = "$keywords|$maxSources|$excerptChars|$recentTopic|$requiresPrimary".lowercase()
+        cache[key]?.let { (at, d) -> if (clock() - at < cacheTtlMs) return@coroutineScope d.copy(query = query) }
+        val results = search.search(keywords, limit = maxSources + 2)
             .distinctBy { it.url.substringBefore('#') }
-        val fetched = results.map { r -> async { r to fetcher.fetch(r.url) } }.awaitAll()
+        // Les wikis renvoient déjà le texte : aucune page à télécharger. Les autres pages sont
+        // récupérées en parallèle, dans un budget de temps ; une page trop lente est ignorée.
+        val pending = results.filter { it.content == null }.associateWith { r -> fetchScope.async { fetcher.fetch(r.url) } }
+        val deadline = System.nanoTime() + fetchBudgetMs * 1_000_000
+        val fetched = results.map { r ->
+            val direct = r.content?.let { FetchResult.Ok(FetchedPage(r.url, r.title, it, null, false)) }
+            r to (direct ?: pending.getValue(r).let { job ->
+                val left = (deadline - System.nanoTime()) / 1_000_000
+                (if (job.isCompleted) job.await() else if (left > 0) withTimeoutOrNull(left) { job.await() } else null)
+                    ?: FetchResult.Failed("trop lente (plus de ${fetchBudgetMs / 1000} s)").also { job.cancel() }
+            })
+        }
         val refused = mutableListOf<Pair<String, String>>()
         val sources = mutableListOf<ResearchSource>()
         for ((r, f) in fetched) {
@@ -70,6 +97,6 @@ class ResearchSession(
             if (sources.none { it.citation.type == SourceType.PRIMARY || it.citation.type == SourceType.INSTITUTIONAL })
                 appendLine("Aucune source primaire ou institutionnelle : ne présente pas la recherche comme une vérification définitive.")
         }
-        ResearchDossier(query, sources, refused, assessment, context)
+        ResearchDossier(query, sources, refused, assessment, context).also { if (sources.isNotEmpty()) cache[key] = clock() to it }
     }
 }

@@ -131,11 +131,20 @@ class OnDeviceSpeedTest {
         assertTrue(ev.none { it is OrchestratorEvent.QualityReview })
     }
 
-    @Test fun comicsStillVerifiedEvenOnDevice() = runTest {
-        val p = ScriptedProvider(capabilities = ProviderCapabilities(Locality.ON_DEVICE, 32_000, reasoningQuality = 4)) { "VERDICT: OK\nPROBLEMES: aucun" }
+    @Test fun comicsOnDeviceStreamInOnePassWithInstantCitationCheck() = runTest {
+        val p = ScriptedProvider(capabilities = ProviderCapabilities(Locality.ON_DEVICE, 32_000, reasoningQuality = 4)) { "C'est dans Black Panther #8 [3]." }
         val o = Orchestrator(ProviderRouter(listOf(p)), MemoryManager(InMemoryMemoryStore(), HashingEmbedder()))
         val ev = o.handle("Dans quel comic Black Panther absorbe l'énergie ?", ConversationContext("s2"), voice = false).toList()
-        assertTrue(ev.any { it is OrchestratorEvent.QualityReview })
+        assertEquals(1, p.requests.size)                     // plus de relecture qui bloque l'affichage
+        assertTrue(ev.none { it is OrchestratorEvent.QualityReview })
+        val done = ev.filterIsInstance<OrchestratorEvent.Completed>().single().fullText
+        assertTrue(done.contains("[3] ne correspond à aucune source consultée"), done)
+    }
+
+    @Test fun citationCheckAcceptsRealSources() {
+        val o = Orchestrator(ProviderRouter(emptyList()), MemoryManager(InMemoryMemoryStore(), HashingEmbedder()))
+        assertEquals(null, o.citationWarning("Selon [1] et [2], puis [B1].", webSources = 2, libraryPassages = 1))
+        assertTrue(o.citationWarning("Voir [4] et [B2].", 2, 1)!!.contains("[4], [B2]"))
     }
 }
 

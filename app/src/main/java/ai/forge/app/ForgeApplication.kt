@@ -226,12 +226,18 @@ class AppContainer(val app: Application) {
         )
     }
 
+    private val pageFetcher by lazy { PageFetcher() }
+    /** Session gardée d'une reconstruction à l'autre : son cache (20 min) et robots.txt restent chauds. */
+    private var researchSession: Pair<String, ResearchSession>? = null
+
     private fun researchTool(): ResearchTool? {
         val provider = searchProvider() ?: return null
-        val session = ResearchSession(provider, PageFetcher())
+        val key = provider.id + "|" + provider.displayName
+        val session = researchSession?.takeIf { it.first == key }?.second
+            ?: ResearchSession(provider, pageFetcher).also { researchSession = key to it }
         return ResearchTool { q ->
-            // Rapide : 4 sources, extraits courts (le contexte d'un modèle embarqué est limité).
-            val d = session.run(q, maxSources = 4, excerptChars = 1_200)
+            // Rapide : 3 sources, extraits courts — chaque caractère est relu par le modèle embarqué.
+            val d = session.run(q, maxSources = 3, excerptChars = 900)
             ResearchContext(d.promptContext, d.bibliography(), d.sources.size, d.refused.size, d.sources.count { it.suspicious },
                 d.sources.map { it.citation.title to it.citation.url })
         }

@@ -60,7 +60,8 @@ class OrchestratorTest {
             }
         }
         val o = Orchestrator(ProviderRouter(listOf(p)), memory())
-        val events = o.handle("Dans quels comics trouve-t-on la preuve que Black Panther absorbe l'énergie ?", ConversationContext("c2"), voice = false).toList()
+        val events = o.handle("Dans quels comics trouve-t-on la preuve que Black Panther absorbe l'énergie ?", ConversationContext("c2"), voice = false,
+            forcedDepth = ThinkingDepth.DEEP_RESEARCH).toList()
         val review = events.filterIsInstance<OrchestratorEvent.QualityReview>().single()
         assertTrue(review.revised)
         val done = events.filterIsInstance<OrchestratorEvent.Completed>().single()
