@@ -31,6 +31,7 @@ class SpeechSegmenter(
     }
 
     private var noise = -60.0
+    private var steadyMs = 0L
     private var speaking = false
     private var loudMs = 0L
     private var silenceMs = 0L
@@ -53,6 +54,10 @@ class SpeechSegmenter(
         val db = dbfs(frame); lastDbfs = db
         val loud = db > max(minDbfs, noise + 20 * log10(ratio))
         if (!loud) noise = if (db < noise) db * 0.3 + noise * 0.7 else db * 0.02 + noise * 0.98
+        // Son continu sans pause (musique, ventilateur) : ce n'est pas de la parole, il devient le
+        // nouveau bruit de fond au bout de quelques secondes.
+        steadyMs = if (loud) steadyMs + ms else 0
+        if (steadyMs > 4_000) noise = db * 0.05 + noise * 0.95
         val out = mutableListOf<Event>()
         if (!speaking) {
             preRoll.addLast(frame); preRollLen += ms

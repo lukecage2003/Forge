@@ -175,3 +175,19 @@ class SpeechSegmenterTest {
         assertTrue(ev.isEmpty())
     }
 }
+
+class SpeechFilterTest {
+    @Test fun dropsFillersAndRepeatsKeepsRealAnswers() {
+        assertTrue(SpeechFilter.isNoise("Nice. Nice nice.")); assertTrue(SpeechFilter.isNoise("Hmm")); assertTrue(SpeechFilter.isNoise("la la la"))
+        assertFalse(SpeechFilter.isNoise("Oui")); assertFalse(SpeechFilter.isNoise("non non")); assertFalse(SpeechFilter.isNoise("Ouvre ma galerie."))
+        assertFalse(SpeechFilter.isNoise("Nice, et ensuite ?"))
+    }
+
+    @Test fun steadyMusicStopsBeingSpeech() {
+        val s = SpeechSegmenter()
+        repeat(25) { s.push(FloatArray(320) { i -> (0.002 * kotlin.math.sin(i * 1.7)).toFloat() }) }
+        val ev = (0 until 400).flatMap { s.push(FloatArray(320) { i -> (0.2 * kotlin.math.sin(i * 0.3)).toFloat() }) }   // 8 s de son continu
+        val end = ev.indexOfFirst { it is SpeechSegmenter.Event.End }
+        assertTrue(end in 0 until 400, "le son continu doit être clos avant 8 s ($end)")
+    }
+}

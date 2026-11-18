@@ -147,3 +147,22 @@ class Vocabulary(learned: Map<String, String> = emptyMap()) {
         )
     }
 }
+
+/**
+ * Rejette les transcriptions qui ne sont pas une vraie demande : mots de remplissage, onomatopées,
+ * un même mot répété (souvent de la musique ou un bruit mal reconnu). « Oui », « non », « stop »
+ * et toute phrase réelle sont conservés.
+ */
+object SpeechFilter {
+    private val fillers = setOf("nice", "hmm", "hum", "hm", "mmh", "mh", "ah", "oh", "euh", "heu", "bah", "eh", "ha", "la", "na", "yeah", "ouh", "wow", "yo", "uh", "um")
+    private val keep = setOf("oui", "non", "stop", "ok", "merci", "attends", "vas-y", "continue", "forge")
+
+    fun isNoise(text: String): Boolean {
+        val words = ai.forge.core.text.TextUtils.tokens(text)
+        if (words.isEmpty()) return true
+        if (words.any { it in keep }) return false
+        if (words.all { it in fillers }) return true
+        // « nice nice nice », « la la la » : un seul mot répété.
+        return words.size >= 2 && words.distinct().size == 1 && words.first().length <= 5
+    }
+}

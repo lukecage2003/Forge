@@ -78,8 +78,11 @@ class VoiceCoordinator(
 
     private val onPartialCb: (String) -> Unit = { partialTranscript.value = it; touch(); signal(PresenceSignal.PartialTranscript) }
     private val onSpeechStartCb: () -> Unit = { controller.onUserSpeechStarted() }
-    private val onFinalCb: (String) -> Unit = { raw ->
-        partialTranscript.value = ""; touch()
+    private val onFinalCb: (String) -> Unit = final@{ raw ->
+        partialTranscript.value = ""
+        // Bruit, musique ou mots de remplissage (« Nice nice », « hmm ») : ignorés.
+        if (ai.forge.voice.SpeechFilter.isNoise(raw)) return@final
+        touch()
         val corrected = vocabulary.correct(raw)
         val text = if (requireWakeWord) WakeWord.strip(corrected) else corrected
         if (text != null) {
@@ -130,9 +133,22 @@ class VoiceCoordinator(
         }
     }
 
+    /**
+     * Pendant que Forge écoute et répond, la musique et les vidéos des autres applications se
+     * mettent en pause (focus audio « assistant »), puis reprennent : comme un vrai assistant,
+     * et le micro n'entend plus la musique.
+     */
+    private val audio = context.getSystemService(AudioManager::class.java)
+    private val focus = android.media.AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+        .setAudioAttributes(android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_ASSISTANT)
+            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH).build())
+        .setOnAudioFocusChangeListener { }.build()
+    private fun holdFocus() { runCatching { audio.requestAudioFocus(focus) } }
+    private fun releaseFocus() { runCatching { audio.abandonAudioFocusRequest(focus) } }
+
     /** handsFree : session pilotée par le service de premier plan (notification permanente). */
-    fun start(@Suppress("UNUSED_PARAMETER") handsFree: Boolean) { lastError.value = null; controller.start(); input.start() }
-    fun stop() { turnWatch?.cancel(); controller.emergencyStop(); input.stop() }
+    fun start(@Suppress("UNUSED_PARAMETER") handsFree: Boolean) { lastError.value = null; holdFocus(); controller.start(); input.start() }
+    fun stop() { turnWatch?.cancel(); controller.emergencyStop(); input.stop(); releaseFocus() }
 
     private var turnWatch: kotlinx.coroutines.Job? = null
 
@@ -144,7 +160,7 @@ class VoiceCoordinator(
         turnWatch?.cancel()
         lastError.value = null; responseText.value = ""; partialTranscript.value = ""
         val startedAt = System.currentTimeMillis(); lastActivity = startedAt
-        controller.start(); input.start()
+        holdFocus(); controller.start(); input.start()
         turnWatch = scope.launch {
             while (true) {
                 kotlinx.coroutines.delay(400)
@@ -152,7 +168,7 @@ class VoiceCoordinator(
                 val nothingYet = lastActivity == startedAt
                 if (state.value == VoiceState.LISTENING && partialTranscript.value.isBlank() && quiet > (if (nothingYet) firstSpeechMs else idleMs)) break
             }
-            input.stop(); controller.emergencyStop()
+            input.stop(); controller.emergencyStop(); releaseFocus()
             onEnded()
         }
     }

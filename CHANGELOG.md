@@ -1,5 +1,15 @@
 # Historique des versions
 
+## 0.9.1 — 18/11/2026
+- **Intégration au système (Android 16)** : la conversation s'affiche comme une notification en
+  direct (bannière, puce de la barre d'état, Now Bar) au lieu d'une bulle dessinée par-dessus la
+  barre d'état. Bulle de repli placée sous la barre d'état.
+- **Commandes instantanées, sans passer par le modèle** : « ouvre ma galerie » (applications
+  retrouvées par leur nom courant), « minuteur 5 minutes », « allume la lampe », « mets du
+  Kendrick Lamar », « itinéraire vers… ». Réponse « C'est fait. … » d'après le résultat réel.
+- **Écoute plus fiable** : la musique des autres applications se met en pause pendant que Forge
+  écoute et répond ; bruits, musique continue et mots de remplissage (« Nice nice ») ignorés.
+
 ## 0.9.0 — 18/11/2026
 - **Réactivité sur le Galaxy S25** :
   - le cerveau reste chargé quand Forge passe en arrière-plan (avant : déchargé à chaque fois,
