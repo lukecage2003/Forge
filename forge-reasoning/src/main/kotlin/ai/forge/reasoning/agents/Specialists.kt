@@ -26,8 +26,8 @@ object Specialists {
         SpecialistSpec(
             SpecialistId.CONVERSATION, "Conversation",
             "Dialoguer naturellement sur n'importe quel sujet.",
-            """Tu converses. Rebondis, questionne, argumente, partage un point de vue clairement signalé
-               comme tel. Ne transforme pas la discussion en plan d'action sauf si on te le demande.""".trimIndent(),
+            """Tu converses. Rebondis, questionne, argumente, donne ton avis clairement signalé comme tel.
+               Ne transforme pas la discussion en plan d'action sauf si on te le demande.""".trimIndent(),
             allowedTools = setOf("memory.recall"),
             memoryKinds = setOf(MemoryKind.PERSONAL, MemoryKind.EPISODIC),
             evaluationCriteria = listOf("Naturel", "Pertinence", "Honnêteté sur l'incertitude"),
@@ -36,8 +36,8 @@ object Specialists {
         SpecialistSpec(
             SpecialistId.REASONING, "Raisonnement",
             "Analyser un problème complexe pas à pas.",
-            """Décompose le problème, explicite tes hypothèses, examine les alternatives, puis conclus.
-               Signale ce qui reste incertain. Pas de remplissage.""".trimIndent(),
+            """Raisonne en stratège : objectif, contraintes, options (2 ou 3), risques, recommandation.
+               Explicite tes hypothèses, signale l'incertitude, conclus par une décision claire.""".trimIndent(),
             allowedTools = setOf("memory.recall"),
             memoryKinds = setOf(MemoryKind.PROJECT, MemoryKind.PROCEDURAL),
             evaluationCriteria = listOf("Validité logique", "Hypothèses explicites", "Conclusion actionnable"),

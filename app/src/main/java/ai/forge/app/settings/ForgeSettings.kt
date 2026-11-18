@@ -26,6 +26,10 @@ data class ForgeSettings(
     val cloudMonthlyBudget: Double? = null,
     /** Recherche Web : SearXNG (idéalement auto-hébergé) ; Brave nécessite une clé (stockée chiffrée). */
     val searxngUrl: String? = null,
+    /** Mains libres : ne répondre que lorsqu'on l'appelle « Forge ». */
+    val requireWakeWord: Boolean = false,
+    /** Écouter pendant que Forge parle même sans écouteurs (risque d'écho). */
+    val bargeInWithoutHeadset: Boolean = false,
 ) {
     companion object {
         private const val FILE = "forge_settings"
@@ -49,6 +53,8 @@ data class ForgeSettings(
                 cloudDailyRequestLimit = p.getInt("cloudDaily", 100).takeIf { it > 0 },
                 cloudMonthlyBudget = p.getFloat("cloudBudget", -1f).takeIf { it >= 0 }?.toDouble(),
                 searxngUrl = p.getString("searxngUrl", null),
+                requireWakeWord = p.getBoolean("wakeWord", false),
+                bargeInWithoutHeadset = p.getBoolean("bargeIn", false),
             )
         }
     }
@@ -68,6 +74,7 @@ data class ForgeSettings(
             .putInt("cloudDaily", cloudDailyRequestLimit ?: 0)
             .putFloat("cloudBudget", cloudMonthlyBudget?.toFloat() ?: -1f)
             .putString("searxngUrl", searxngUrl)
+            .putBoolean("wakeWord", requireWakeWord).putBoolean("bargeIn", bargeInWithoutHeadset)
             .apply()
     }
 }

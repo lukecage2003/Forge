@@ -120,7 +120,9 @@ class AppContainer(val app: Application) {
     var orchestrator: Orchestrator = buildOrchestrator()
         private set
 
-    val voice = VoiceCoordinator(app, scope, { orchestrator }, { conversation })
+    val voice = VoiceCoordinator(app, scope, { orchestrator }, { conversation }).also {
+        it.requireWakeWord = settings.requireWakeWord; it.bargeInEnabled = settings.bargeInWithoutHeadset
+    }
 
 
     @Synchronized
@@ -224,6 +226,8 @@ class AppContainer(val app: Application) {
         settings = new
         new.save(app)
         gate.ceiling = new.autonomyCeiling
+        voice.requireWakeWord = new.requireWakeWord
+        voice.bargeInEnabled = new.bargeInWithoutHeadset
         orchestrator = buildOrchestrator()
         if (brain.value !is BrainState.Downloading) brain.value = if (providers().isEmpty()) BrainState.Missing else BrainState.Ready
     }

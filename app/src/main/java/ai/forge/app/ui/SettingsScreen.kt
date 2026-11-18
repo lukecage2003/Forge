@@ -151,6 +151,15 @@ fun SettingsScreen(container: AppContainer) {
                     Text("Afficher la transcription", Modifier.weight(1f), color = ForgePalette.Text)
                     Switch(s.showTranscript, { s = s.copy(showTranscript = it) }, colors = switchColors)
                 }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) { Text("Répondre seulement à « Forge »", color = ForgePalette.Text); Hint("Mains libres : dites « Forge, … » pour lui parler.") }
+                    Switch(s.requireWakeWord, { s = s.copy(requireWakeWord = it) }, colors = switchColors)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) { Text("L'interrompre à la voix sans écouteurs", color = ForgePalette.Text)
+                        Hint("Automatique avec écouteurs. Sans écouteurs, le micro peut capter la voix de Forge.") }
+                    Switch(s.bargeInWithoutHeadset, { s = s.copy(bargeInWithoutHeadset = it) }, colors = switchColors)
+                }
             }
         }
 

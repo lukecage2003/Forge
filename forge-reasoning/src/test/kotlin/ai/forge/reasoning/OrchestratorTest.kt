@@ -45,7 +45,7 @@ class OrchestratorTest {
         assertEquals("Ah, le Superman de 1978. Un film fondateur.", done.fullText)
         assertEquals(listOf(Role.USER, Role.ASSISTANT), ctx.turns.map { it.role })
         // Le prompt vocal impose l'oral sans Markdown.
-        assertTrue(p.requests.first().messages.first().content.contains("Mode vocal"))
+        assertTrue(p.requests.first().messages.first().content.contains("Réponse orale"))
     }
 
     @Test fun deepRequestGoesThroughQualityControlAndRevision() = runTest {

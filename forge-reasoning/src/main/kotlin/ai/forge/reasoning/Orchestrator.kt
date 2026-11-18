@@ -49,6 +49,7 @@ sealed interface OrchestratorEvent {
     data class MemoryEvent(val outcome: RememberOutcome) : OrchestratorEvent
     /** Contenu externe contenant une tentative d'instruction : signalé, jamais exécuté. */
     data class SecurityWarning(val source: String, val findings: List<String>) : OrchestratorEvent
+    data class ScriptReady(val script: ai.forge.editorial.ViralScript, val checks: List<ai.forge.editorial.RetentionCheck>, val revised: Boolean) : OrchestratorEvent
     data class LibraryResults(val passages: List<LibraryPassage>) : OrchestratorEvent
     data class ResearchDone(val sourceCount: Int, val bibliography: String, val refused: Int) : OrchestratorEvent
     data class ActionProposed(val call: ToolCall) : OrchestratorEvent
@@ -77,6 +78,8 @@ class Orchestrator(
     private val researchTool: ResearchTool? = null,
     /** Bibliothèque personnelle indexée (null = non configurée). */
     private val libraryTool: LibraryTool? = null,
+    /** Analyse du marché YouTube (null = non configurée). */
+    private val marketTool: MarketTool? = null,
 ) {
     fun handle(input: String, ctx: ConversationContext, voice: Boolean, forcedDepth: ThinkingDepth? = null): Flow<OrchestratorEvent> = flow {
         // 1. Mémoire : uniquement ce que l'utilisateur veut explicitement conserver.
@@ -159,6 +162,12 @@ class Orchestrator(
             researchNote = listOfNotNull(researchNote, libNote).joinToString("\n\n")
             if (passages.isNotEmpty()) bibliography = listOfNotNull(bibliography, passages.mapIndexed { i, p ->
                 "[B${i + 1}] ${p.reference} — ${if (p.verified) "vérifié" else "piste OCR, page à consulter"}" }.joinToString("\n")).joinToString("\n")
+        }
+
+        // Studio de scripts : format structuré, contrôle de rétention déterministe, une révision au besoin.
+        if (intent.primary == SpecialistId.EDITORIAL) {
+            val text = handleScript(input, provider, ctx, voice, memoryContext, researchNote, bibliography, securityRule) { emit(it) }
+            if (text != null) { emit(OrchestratorEvent.Completed(text)); return@flow }
         }
 
         // 4. Spécialistes de soutien (mode approfondi) : notes de travail internes.
@@ -254,6 +263,46 @@ class Orchestrator(
         return text
     }
 
+    private suspend fun handleScript(
+        input: String, provider: ai.forge.models.LlmProvider, ctx: ConversationContext, voice: Boolean, memoryContext: String,
+        researchNote: String?, bibliography: String?, securityRule: String?, emit: suspend (OrchestratorEvent) -> Unit,
+    ): String? {
+        val platform = ai.forge.editorial.Platform.detect(input)
+        val seconds = Regex("(\\d{1,3})\\s*(s|sec|secondes)\\b").find(input)?.groupValues?.get(1)?.toInt()
+            ?: Regex("(\\d{1,2})\\s*(min|minutes)\\b").find(input)?.groupValues?.get(1)?.toInt()?.times(60)
+            ?: platform.defaultSeconds
+        val market = marketTool?.let { runCatching { it.insights(input, platform) }.getOrNull() }
+        val studio = ai.forge.editorial.ScriptStudio
+        val req = request(Specialists[SpecialistId.EDITORIAL], ctx, voice = false, memoryContext,
+            extra = studio.prompt(input, platform, seconds, market, researchNote), securityRule = securityRule).copy(maxTokens = 2_500)
+        val draft = provider.complete(req).getOrElse { emit(OrchestratorEvent.Failed(it.message ?: "Échec de génération")); return null }
+        var script = studio.parse(draft, platform)
+        var checks = studio.check(script, seconds)
+        var raw = draft
+        val critical = checks.filter { !it.ok && (it.label.startsWith("Script structuré") || it.label.startsWith("Pas d'introduction") || it.label.startsWith("Accroche")) }
+        var revised = false
+        if (critical.isNotEmpty()) {
+            val fix = provider.complete(req.copy(messages = req.messages + listOf(
+                ChatMessage(Role.ASSISTANT, draft),
+                ChatMessage(Role.USER, "Corrige ces points en gardant exactement le même format :\n" + critical.joinToString("\n") { "- ${it.label} → ${it.fix}" }),
+            ))).getOrNull()
+            if (fix != null) {
+                val s2 = studio.parse(fix, platform); val c2 = studio.check(s2, seconds)
+                if (c2.count { it.ok } >= checks.count { it.ok }) { script = s2; checks = c2; raw = fix; revised = true }
+            }
+        }
+        emit(OrchestratorEvent.ScriptReady(script, checks, revised))
+        val text = buildString {
+            append(raw.trim())
+            if (!voice) { append("\n\n"); append(studio.report(checks)) }
+            bibliography?.let { if (!voice) append("\n\nSources consultées :\n").append(it) }
+        }
+        emit(OrchestratorEvent.Token(text))
+        ctx.add(ChatMessage(Role.ASSISTANT, raw.trim()))
+        recordUsage(provider.id, ctx, raw)
+        return text
+    }
+
     private fun recordUsage(providerId: String, ctx: ConversationContext, output: String) {
         val input = ctx.turns.joinToString(" ") { it.content }
         router.usage.record(providerId, router.usage.estimateTokens(input), router.usage.estimateTokens(output))
@@ -304,7 +353,7 @@ class Orchestrator(
     }
 
     private companion object {
-        val GUARDED = setOf(SpecialistId.COMICS, SpecialistId.EDITORIAL, SpecialistId.RESEARCH)
+        val GUARDED = setOf(SpecialistId.COMICS, SpecialistId.RESEARCH)
     }
 
     internal fun parseReview(text: String): Pair<String, String> {

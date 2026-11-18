@@ -136,3 +136,57 @@ class OnDeviceSpeedTest {
         assertTrue(ev.any { it is OrchestratorEvent.QualityReview })
     }
 }
+
+class ScriptFlowTest {
+    private val goodScript = """
+        ### TITRES
+        1. La faille du costume de Black Panther
+        2. Le vibranium a un point faible
+        ### MINIATURE
+        Masque fissuré
+        ### ACCROCHES
+        1. Le costume de T'Challa a une faille.
+        2. Et si son armure était son piège ?
+        ### SCRIPT
+        [0:00] PLAN: masque | ÉCRAN: UNE FAILLE ? | TEXTE: Le costume de T'Challa a une faille.
+        [0:03] PLAN: impact | ÉCRAN: énergie | TEXTE: Chaque coup est absorbé et stocké.
+        [0:06] PLAN: masque | ÉCRAN: la faille | TEXTE: Et cette faille, c'est le costume lui-même.
+        ### SOURCES
+        - Black Panther #8
+    """.trimIndent()
+
+    @Test fun softIntroIsAutomaticallyRevisedAndReportAppended() = runTest {
+        var n = 0
+        val p = ScriptedProvider(capabilities = ProviderCapabilities(Locality.ON_DEVICE, 32_000, reasoningQuality = 4)) { _ ->
+            n++
+            if (n == 1) goodScript.replace("TEXTE: Le costume de T'Challa a une faille.", "TEXTE: Salut tout le monde, aujourd'hui on parle de Black Panther.")
+            else goodScript
+        }
+        val o = Orchestrator(ProviderRouter(listOf(p)), MemoryManager(InMemoryMemoryStore(), HashingEmbedder()))
+        val ev = o.handle("Écris-moi un script TikTok sur la faille du costume de Black Panther", ConversationContext("v"), voice = false).toList()
+        val ready = ev.filterIsInstance<OrchestratorEvent.ScriptReady>().single()
+        assertTrue(ready.revised)
+        assertEquals("Le costume de T'Challa a une faille.", ready.script.beats.first().narration)
+        assertTrue(p.requests.first().messages.first().content.contains("Règles de rétention"))
+        val done = ev.filterIsInstance<OrchestratorEvent.Completed>().single().fullText
+        assertTrue(done.contains("Contrôle de rétention"))
+        assertEquals(2, p.requests.size)
+    }
+
+    @Test fun marketInsightsAreInjected() = runTest {
+        val p = ScriptedProvider(capabilities = ProviderCapabilities(Locality.ON_DEVICE, 32_000, reasoningQuality = 4)) { goodScript }
+        val market = MarketTool { _, _ -> "- Les titres en question surperforment (x3,2)" }
+        Orchestrator(ProviderRouter(listOf(p)), MemoryManager(InMemoryMemoryStore(), HashingEmbedder()), marketTool = market)
+            .handle("Fais un script Short YouTube sur Venom", ConversationContext("m"), voice = false).toList()
+        assertTrue(p.requests.first().messages.first().content.contains("x3,2"))
+    }
+}
+
+class PersonaTest {
+    @Test fun personaGivesFrankVerdictsAndStaysOriginal() {
+        val p = ai.forge.core.persona.ForgePersona.systemPrompt(voice = false)
+        assertTrue(p.contains("Mauvaise idée")); assertTrue(p.contains("stratège")); assertTrue(p.contains("Jamais de flatterie"))
+        assertFalse(p.contains("T'Challa")); assertFalse(p.contains("Black Panther"))   // inspiration, pas imitation
+        assertTrue(ai.forge.core.persona.ForgePersona.systemPrompt(voice = true).length < 2_200)  // prompt compact = réponse plus rapide
+    }
+}
