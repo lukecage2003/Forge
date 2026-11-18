@@ -128,7 +128,8 @@ class Orchestrator(
         val primary = Specialists[intent.primary]
 
         // Actions Android (§11) : planifier → portail d'autorisation → résultat réel.
-        if (intent.primary == SpecialistId.ANDROID_ACTION) {
+        // Commandes instantanées (« ouvre la galerie », « minuteur 5 minutes »…) : reconnues sans modèle.
+        if (intent.primary == SpecialistId.ANDROID_ACTION || (actionExecutor != null && actionPlanner?.quickParse(input) != null)) {
             ctx.add(ChatMessage(Role.USER, input))
             val text = handleAction(input, intent) { emit(it) }
             ctx.add(ChatMessage(Role.ASSISTANT, text))

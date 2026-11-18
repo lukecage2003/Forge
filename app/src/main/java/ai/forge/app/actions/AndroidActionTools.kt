@@ -86,3 +86,84 @@ class OpenAppTool(private val context: Context) : Tool {
         return ToolResult.Success("Application $pkg ouverte.")
     }
 }
+
+/** Ouvre une application par son nom courant (« galerie », « appareil photo », « Spotify »…). */
+class OpenAppByNameTool(private val context: Context) : Tool {
+    override val spec = ToolSpec("android.open_app", "Ouvre une application installée à partir de son nom (argument name).",
+        AutonomyLevel.L2_REVERSIBLE, reversible = true)
+
+    override suspend fun execute(arguments: JsonObject): ToolResult {
+        val name = arguments.str("name") ?: return ToolResult.Error("Nom d'application manquant.")
+        val pm = context.packageManager
+        val apps = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+            .map { ai.forge.actions.AppNameMatcher.App(it.loadLabel(pm).toString(), it.activityInfo.packageName) }
+            .distinctBy { it.packageName }
+        val app = ai.forge.actions.AppNameMatcher.best(name, apps) ?: return ToolResult.Error("je ne trouve pas « $name » parmi vos applications.")
+        val intent = pm.getLaunchIntentForPackage(app.packageName) ?: return ToolResult.Error("« ${app.label} » ne peut pas être ouverte.")
+        return try {
+            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED))
+            ToolResult.Success("J'ouvre ${app.label}.")
+        } catch (e: Exception) { ToolResult.Error("Android a refusé d'ouvrir ${app.label} (${e.message}).") }
+    }
+}
+
+/** Minuteur (application Horloge, sans écran intermédiaire). */
+class TimerTool(private val context: Context) : Tool {
+    override val spec = ToolSpec("android.timer", "Lance un minuteur (argument seconds).", AutonomyLevel.L2_REVERSIBLE, reversible = true)
+
+    override suspend fun execute(arguments: JsonObject): ToolResult {
+        val s = arguments.int("seconds")?.takeIf { it in 1..86_400 } ?: return ToolResult.Error("Durée invalide.")
+        val intent = Intent(AlarmClock.ACTION_SET_TIMER).putExtra(AlarmClock.EXTRA_LENGTH, s).putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return try { context.startActivity(intent); ToolResult.Success("Minuteur de ${human(s)} lancé.") }
+        catch (e: ActivityNotFoundException) { ToolResult.Error("Aucune application d'horloge ne gère les minuteurs.") }
+    }
+
+    private fun human(s: Int) = when { s % 3600 == 0 -> "${s / 3600} h"; s % 60 == 0 -> "${s / 60} min"; s > 60 -> "${s / 60} min ${s % 60} s"; else -> "$s s" }
+}
+
+/** Lampe torche (flash de l'appareil photo). */
+class TorchTool(private val context: Context) : Tool {
+    override val spec = ToolSpec("android.torch", "Allume ou éteint la lampe torche (argument on).", AutonomyLevel.L2_REVERSIBLE, reversible = true)
+
+    override suspend fun execute(arguments: JsonObject): ToolResult {
+        val on = arguments["on"]?.jsonPrimitive?.contentOrNull?.toBooleanStrictOrNull() ?: true
+        val cm = context.getSystemService(android.hardware.camera2.CameraManager::class.java)
+        val id = cm.cameraIdList.firstOrNull { cm.getCameraCharacteristics(it).get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE) == true }
+            ?: return ToolResult.Error("aucun flash disponible.")
+        return runCatching { cm.setTorchMode(id, on) }.fold({ ToolResult.Success(if (on) "Lampe allumée." else "Lampe éteinte.") },
+            { ToolResult.Error("la lampe est occupée (${it.message}).") })
+    }
+}
+
+/** Musique : recherche et lecture dans Spotify (ou l'application musicale par défaut). */
+class PlayMusicTool(private val context: Context) : Tool {
+    override val spec = ToolSpec("android.play_music", "Lance de la musique (argument query : artiste, titre, playlist).", AutonomyLevel.L2_REVERSIBLE, reversible = true)
+
+    override suspend fun execute(arguments: JsonObject): ToolResult {
+        val q = arguments.str("query").orEmpty()
+        val base = Intent(android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
+            .putExtra(android.app.SearchManager.QUERY, q).putExtra(android.provider.MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val spotify = Intent(base).setPackage("com.spotify.music")
+        for (i in listOf(spotify, base)) {
+            try { context.startActivity(i); return ToolResult.Success(if (q.isBlank()) "Musique lancée." else "Je lance « $q ».") } catch (_: ActivityNotFoundException) {}
+        }
+        return ToolResult.Error("aucune application musicale ne répond.")
+    }
+}
+
+/** Itinéraire vers une destination (Google Maps ou toute application de cartes). */
+class NavigateTool(private val context: Context) : Tool {
+    override val spec = ToolSpec("android.navigate", "Ouvre l'itinéraire vers une destination (argument destination).", AutonomyLevel.L2_REVERSIBLE, reversible = true)
+
+    override suspend fun execute(arguments: JsonObject): ToolResult {
+        val d = arguments.str("destination") ?: return ToolResult.Error("Destination manquante.")
+        val enc = android.net.Uri.encode(d)
+        for (uri in listOf("google.navigation:q=$enc", "geo:0,0?q=$enc")) {
+            try { context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(uri)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return ToolResult.Success("Itinéraire vers $d.") }
+            catch (_: ActivityNotFoundException) {}
+        }
+        return ToolResult.Error("aucune application de cartes installée.")
+    }
+}

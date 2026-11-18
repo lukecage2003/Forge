@@ -39,6 +39,7 @@ class ActionPlanner(private val tools: () -> List<ToolSpec>) {
     private val alarm = Regex("(reveil|alarme|reveille[- ]moi)\\D{0,20}?(\\d{1,2})\\s*(?:h|:|heures?)\\s*(\\d{2})?(?:\\s*(?:pour|:)\\s*(.+))?")
 
     fun quickParse(utterance: String): ToolCall? {
+        QuickCommands.parse(utterance)?.let { c -> if (tools().any { it.name == c.tool }) return c }
         val t = TextUtils.fold(utterance)
         if (tools().none { it.name == "android.alarm" }) return null
         alarm.find(t)?.let { m ->
@@ -92,7 +93,7 @@ class ActionPlanner(private val tools: () -> List<ToolSpec>) {
     companion object {
         /** Message à l'utilisateur construit à partir du résultat RÉEL, jamais rédigé par le modèle. */
         fun report(call: ToolCall, outcome: ActionOutcome): String = when (outcome.status) {
-            ActionOutcome.Status.DONE -> "C'est transmis : ${outcome.detail}"
+            ActionOutcome.Status.DONE -> "C'est fait. ${outcome.detail}"
             ActionOutcome.Status.NEEDS_CONFIRMATION -> "Je n'ai rien exécuté. ${outcome.detail} Confirmez-vous « ${call.tool} » ?"
             ActionOutcome.Status.DENIED -> "Je ne peux pas le faire : ${outcome.detail}"
             ActionOutcome.Status.FAILED -> "L'action a échoué : ${outcome.detail}"

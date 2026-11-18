@@ -59,7 +59,7 @@ class ActionFlowTest {
         val result = ev.filterIsInstance<OrchestratorEvent.ActionResult>().single()
         assertEquals(ActionOutcome.Status.DONE, result.outcome.status)
         assertEquals(1, exec.executed.size)
-        assertTrue(ev.filterIsInstance<OrchestratorEvent.Completed>().single().fullText.startsWith("C'est transmis"))
+        assertTrue(ev.filterIsInstance<OrchestratorEvent.Completed>().single().fullText.startsWith("C'est fait"))
     }
 
     @Test fun externalEffectNeedsConfirmationThenRunsOnce() = runTest {
@@ -72,7 +72,7 @@ class ActionFlowTest {
             ?: fail("Pas d'action : ${ev}")
         assertEquals(ActionOutcome.Status.NEEDS_CONFIRMATION, r.outcome.status)
         assertTrue(exec.executed.isEmpty())
-        assertTrue(o.executeConfirmed(r.call, ctx).startsWith("C'est transmis"))
+        assertTrue(o.executeConfirmed(r.call, ctx).startsWith("C'est fait"))
         assertEquals(1, exec.executed.size)
     }
 
@@ -348,5 +348,44 @@ class ProjectMemoryTest {
         val c = ConversationContext("b", maxTurns = 12)
         repeat(13) { c.add(ai.forge.core.model.ChatMessage(ai.forge.core.model.Role.USER, "m$it")) }
         assertEquals("m6", c.turns.first().content); assertEquals(7, c.turns.size)
+    }
+}
+
+class QuickCommandsTest {
+    private fun p(s: String) = QuickCommands.parse(s)
+    private fun arg(s: String, k: String) = p(s)!!.arguments[k].toString().trim('"')
+
+    @Test fun opensAppsByName() {
+        assertEquals("android.open_app", p("Ouvre ma galerie.")!!.tool); assertEquals("galerie", arg("Ouvre ma galerie.", "name"))
+        assertEquals("Spotify", arg("Forge, lance Spotify", "name"))
+        assertEquals("appareil photo", arg("tu peux m'ouvrir l'appareil photo ?", "name"))
+        assertEquals("Paramètres", arg("Ouvre les Paramètres", "name"))
+    }
+
+    @Test fun timersTorchMusicAndNavigation() {
+        assertEquals("300", arg("Mets un minuteur de 5 minutes", "seconds"))
+        assertEquals("90", arg("90 secondes de minuteur", "seconds"))
+        assertEquals("true", arg("Allume la lampe torche", "on")); assertEquals("false", arg("éteins la lampe", "on"))
+        assertEquals("android.play_music", p("Mets du Kendrick Lamar sur Spotify")!!.tool)
+        assertEquals("Kendrick Lamar", arg("Mets de la musique de Kendrick Lamar", "query"))
+        assertEquals("Lyon Part-Dieu", arg("Itinéraire vers Lyon Part-Dieu", "destination"))
+    }
+
+    @Test fun leavesQuestionsAndConversationAlone() {
+        assertNull(p("Qui a créé Black Panther ?"))
+        assertNull(p("Ouvre-moi ton cœur, qu'est-ce que tu penses vraiment de mon script sur Black Panther et Tornade ?"))
+        assertNull(p("Je mets du temps à comprendre"))
+    }
+
+    @Test fun orchestratorRunsQuickCommandWithoutTheModel() = runTest {
+        val p = ScriptedProvider(capabilities = ProviderCapabilities(Locality.ON_DEVICE, 8_192, reasoningQuality = 4)) { "ne devrait pas servir" }
+        val calls = mutableListOf<ai.forge.security.ToolCall>()
+        val o = Orchestrator(ProviderRouter(listOf(p)), MemoryManager(InMemoryMemoryStore(), HashingEmbedder()),
+            actionPlanner = ActionPlanner { listOf(ai.forge.security.ToolSpec("android.open_app", "ouvre", ai.forge.core.model.AutonomyLevel.L2_REVERSIBLE, reversible = true)) },
+            actionExecutor = ToolCallExecutor { c, _ -> calls += c; ActionOutcome(ActionOutcome.Status.DONE, "J'ouvre Galerie.") })
+        val done = o.handle("Ouvre ma galerie", ConversationContext("q"), voice = true).toList().filterIsInstance<OrchestratorEvent.Completed>().single()
+        assertEquals(0, p.requests.size)                       // aucune génération : instantané
+        assertEquals("galerie", calls.single().arguments["name"].toString().trim('"'))
+        assertEquals("C'est fait. J'ouvre Galerie.", done.fullText)
     }
 }

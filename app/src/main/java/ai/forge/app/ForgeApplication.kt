@@ -95,7 +95,9 @@ class AppContainer(val app: Application) {
     val scripts = ai.forge.app.studio.ScriptRepository(kv)
 
     val gate = PermissionGate(settings.autonomyCeiling)
-    val tools = ToolRegistry(listOf(SetAlarmTool(app), CalendarDraftTool(app), ShareTextTool(app), OpenAppTool(app)))
+    val tools = ToolRegistry(listOf(SetAlarmTool(app), CalendarDraftTool(app), ShareTextTool(app), OpenAppTool(app),
+        ai.forge.app.actions.OpenAppByNameTool(app), ai.forge.app.actions.TimerTool(app), ai.forge.app.actions.TorchTool(app),
+        ai.forge.app.actions.PlayMusicTool(app), ai.forge.app.actions.NavigateTool(app)))
     /** Action Center : journal + arrêt d'urgence (§11). */
     val actions = ActionEngine(tools, gate)
     val usage = UsageMeter()
