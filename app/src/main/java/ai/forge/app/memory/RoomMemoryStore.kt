@@ -36,12 +36,56 @@ interface MemoryDao {
     @Query("DELETE FROM memory WHERE id = :id") suspend fun delete(id: String): Int
 }
 
-@Database(entities = [MemoryRow::class], version = 1, exportSchema = false)
+/** Conversation enregistrée (historique). */
+@Entity(tableName = "conversation")
+data class ConversationRow(@PrimaryKey val id: String, val title: String, val createdAtMs: Long, val updatedAtMs: Long)
+
+@Entity(tableName = "message", indices = [androidx.room.Index("conversationId")])
+data class MessageRow(@PrimaryKey val id: String, val conversationId: String, val author: String, val text: String, val meta: String?, val atMs: Long)
+
+/** Stockage clé/valeur JSON (scripts du studio, cours et fiches de révision…). */
+@Entity(tableName = "kv", primaryKeys = ["namespace", "key"])
+data class KvRow(val namespace: String, val key: String, val json: String, val updatedAtMs: Long)
+
+@Dao
+interface ConversationDao {
+    @Upsert suspend fun upsert(c: ConversationRow)
+    @Upsert suspend fun insert(m: MessageRow)
+    @Query("SELECT * FROM conversation WHERE id = :id") suspend fun get(id: String): ConversationRow?
+    @Query("SELECT * FROM conversation ORDER BY updatedAtMs DESC LIMIT :limit") suspend fun recent(limit: Int): List<ConversationRow>
+    @Query("SELECT DISTINCT c.* FROM conversation c JOIN message m ON m.conversationId = c.id WHERE m.text LIKE '%' || :q || '%' OR c.title LIKE '%' || :q || '%' ORDER BY c.updatedAtMs DESC LIMIT :limit")
+    suspend fun search(q: String, limit: Int): List<ConversationRow>
+    @Query("SELECT * FROM message WHERE conversationId = :id ORDER BY atMs, rowid") suspend fun messages(id: String): List<MessageRow>
+    @Query("DELETE FROM message WHERE conversationId = :id") suspend fun deleteMessages(id: String)
+    @Query("DELETE FROM conversation WHERE id = :id") suspend fun deleteConversation(id: String)
+}
+
+@Dao
+interface KvDao {
+    @Upsert suspend fun put(row: KvRow)
+    @Query("SELECT * FROM kv WHERE namespace = :ns ORDER BY updatedAtMs DESC") suspend fun all(ns: String): List<KvRow>
+    @Query("SELECT * FROM kv WHERE namespace = :ns AND `key` = :key") suspend fun get(ns: String, key: String): KvRow?
+    @Query("DELETE FROM kv WHERE namespace = :ns AND `key` = :key") suspend fun delete(ns: String, key: String)
+}
+
+@Database(entities = [MemoryRow::class, ConversationRow::class, MessageRow::class, KvRow::class], version = 2, exportSchema = false)
 abstract class ForgeDatabase : RoomDatabase() {
     abstract fun memory(): MemoryDao
+    abstract fun conversations(): ConversationDao
+    abstract fun kv(): KvDao
 
     companion object {
-        fun open(context: Context) = Room.databaseBuilder(context, ForgeDatabase::class.java, "forge.db").build()
+        /** v1 → v2 : ajout de l'historique et du stockage clé/valeur, sans toucher à la mémoire. */
+        val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `conversation` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `createdAtMs` INTEGER NOT NULL, `updatedAtMs` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `message` (`id` TEXT NOT NULL, `conversationId` TEXT NOT NULL, `author` TEXT NOT NULL, `text` TEXT NOT NULL, `meta` TEXT, `atMs` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_message_conversationId` ON `message` (`conversationId`)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `kv` (`namespace` TEXT NOT NULL, `key` TEXT NOT NULL, `json` TEXT NOT NULL, `updatedAtMs` INTEGER NOT NULL, PRIMARY KEY(`namespace`, `key`))")
+            }
+        }
+
+        fun open(context: Context) = Room.databaseBuilder(context, ForgeDatabase::class.java, "forge.db").addMigrations(MIGRATION_1_2).build()
     }
 }
 

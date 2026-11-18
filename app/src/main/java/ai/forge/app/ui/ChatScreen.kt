@@ -79,6 +79,7 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
     val listState = rememberLazyListState()
     var pageToImport by remember { mutableStateOf<android.net.Uri?>(null) }
     var feedbackFor by remember { mutableStateOf<Int?>(null) }
+    var showHistory by remember { mutableStateOf(false) }
     var lastScript by remember { mutableStateOf<ai.forge.editorial.ViralScript?>(null) }
     var motionStatus by remember { mutableStateOf<String?>(null) }
     var exportFor by remember { mutableStateOf<Int?>(null) }
@@ -123,6 +124,8 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         busy = true
         lines += ChatLine("Vous", text.trim())
+        val convId = container.conversation.id
+        container.scope.launch { container.history.append(convId, "Vous", text.trim()) }
         val idx = lines.size
         lines += ChatLine("Forge", "", request = text.trim())
         lastScript = null; motionStatus = null
@@ -146,6 +149,7 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
                     }
                     is OrchestratorEvent.Completed -> {
                         lines[idx] = lines[idx].copy(text = e.fullText)
+                        container.scope.launch { container.history.append(convId, "Forge", e.fullText, lines[idx].meta) }
                         // Document demandé (« fais-moi un PDF… ») : le fichier est créé automatiquement.
                         ai.forge.writing.DocFormat.requested(text)?.let { f -> exportLine(idx, f) }
                     }
@@ -162,6 +166,14 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
     LaunchedEffect(lines.lastOrNull()?.text?.length?.div(80), lines.size) { if (lines.isNotEmpty()) listState.scrollToItem(lines.lastIndex, Int.MAX_VALUE / 2) }
 
     val orbState = when { voiceOn -> presence; busy -> PresenceState.THINKING; brain is AppContainer.BrainState.Error -> PresenceState.ERROR; else -> PresenceState.STANDBY }
+
+    if (showHistory) HistoryDialog(container, onOpen = { id ->
+        showHistory = false
+        scope.launch {
+            val msgs = container.resumeConversation(id)
+            lines.clear(); lines.addAll(msgs.map { ChatLine(it.author, it.text, it.meta, request = if (it.author == "Forge") "" else null, rated = true) })
+        }
+    }, onClose = { showHistory = false })
 
     exportFor?.let { i ->
         androidx.compose.material3.AlertDialog(onDismissRequest = { exportFor = null }, containerColor = ForgePalette.SurfaceHigh, shape = RoundedCornerShape(28.dp),
@@ -197,6 +209,7 @@ fun ChatScreen(container: AppContainer, onSettings: () -> Unit) {
                     Text("Forge", style = MaterialTheme.typography.titleMedium, color = ForgePalette.Text)
                     Text(statusLine(voiceOn, presence, brain, brainDetail, online), style = MaterialTheme.typography.labelMedium, color = ForgePalette.TextMuted, maxLines = 1)
                 }
+                IconButton(onClick = { showHistory = true }) { Icon(Icons.Default.History, "Historique des conversations", tint = ForgePalette.Text) }
                 IconButton(onClick = { container.newConversation(); lines.clear() }) { Icon(Icons.Default.Edit, "Nouvelle conversation", tint = ForgePalette.Text) }
             }
         }

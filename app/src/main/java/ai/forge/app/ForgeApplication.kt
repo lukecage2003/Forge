@@ -82,6 +82,9 @@ class AppContainer(val app: Application) {
     private val db = ForgeDatabase.open(app)
     // Embedder lexical de repli ; à remplacer par un embedder sémantique local (voir ROADMAP).
     val memory = MemoryManager(RoomMemoryStore(db.memory()), HashingEmbedder())
+    /** Historique des conversations et stockage des scripts/cours. */
+    val history = ai.forge.app.history.ConversationStore(db.conversations())
+    val kv = db.kv()
 
     val gate = PermissionGate(settings.autonomyCeiling)
     val tools = ToolRegistry(listOf(SetAlarmTool(app), CalendarDraftTool(app), ShareTextTool(app), OpenAppTool(app)))
@@ -305,6 +308,13 @@ class AppContainer(val app: Application) {
     }
 
     fun newConversation() { conversation = ConversationContext(UUID.randomUUID().toString()) }
+
+    /** Reprend une conversation enregistrée ; renvoie ses messages pour l'affichage. */
+    suspend fun resumeConversation(id: String): List<ai.forge.app.history.StoredMessage> {
+        val (ctx, msgs) = history.restore(id)
+        conversation = ctx
+        return msgs
+    }
 
     // Déclaré en dernier : le rappel réseau peut arriver immédiatement et utilise tout ce qui précède.
     init {
