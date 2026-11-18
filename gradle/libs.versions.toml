@@ -14,6 +14,7 @@ ksp = "2.3.14"
 datastore = "1.1.7"
 mediapipeGenai = "0.10.24"
 litertlm = "0.19.1"
+mediapipeAudio = "1.2.3"
 playServicesAuth = "21.3.0"
 robolectric = "4.14.1"
 mlkitText = "16.0.1"
@@ -42,6 +43,7 @@ room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
+mediapipe-audio = { module = "com.google.mediapipe:tasks-audio", version.ref = "mediapipeAudio" }
 litertlm = { module = "com.google.ai.edge.litertlm:litertlm-android", version.ref = "litertlm" }
 mediapipe-genai = { module = "com.google.mediapipe:tasks-genai", version.ref = "mediapipeGenai" }
 play-services-auth = { module = "com.google.android.gms:play-services-auth", version.ref = "playServicesAuth" }

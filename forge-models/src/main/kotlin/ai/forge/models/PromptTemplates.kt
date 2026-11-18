@@ -91,6 +91,14 @@ data class DownloadableModel(
             license = "Apache 2.0", ramMb = 2_200, quality = 2, contextTokens = 4_096,
         )
 
+        /** Voix neuronale française hors-ligne : Kyutai Pocket TTS (voix « Estelle »), licence CC-BY 4.0. */
+        val POCKET_TTS_FR = DownloadableModel(
+            id = "pocket-tts-fr", displayName = "Voix Estelle (Pocket TTS)", tagline = "Voix neuronale naturelle, hors-ligne",
+            url = "$HF/pocket-tts/resolve/main/pocket_tts_fr_int8.litertlm", fileName = "pocket_tts_fr_int8.litertlm",
+            sizeBytes = 127_090_696, sha256 = "6885614825d59fa5b48eb32d5f79ee11b4ea2b0a603d2508354ba88005b200eb",
+            license = "CC-BY 4.0 (Kyutai)", ramMb = 400, quality = 0, contextTokens = 0,
+        )
+
         val RECOMMENDED = GEMMA4_E4B
         val CATALOG = listOf(GEMMA4_E4B, GEMMA4_E2B, QWEN25_1_5B)
         fun byFileName(name: String) = CATALOG.firstOrNull { it.fileName == name }

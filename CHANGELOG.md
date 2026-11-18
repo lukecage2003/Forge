@@ -1,5 +1,19 @@
 # Historique des versions
 
+## 0.7.0 — 18/11/2026
+- **Écoute des longues phrases** : silences naturels, suite de phrase recollée au lieu de remplacer.
+- **Réponses plus rapides** : conversation gardée en mémoire par le moteur local (plus de relecture
+  complète), pas de double passe ni de recherche Web à l'oral.
+- **Historique des conversations** (recherche, reprise, suppression) — migration de base sans perte.
+- **Vision** : images jointes vues par Gemma 4 (repli OCR honnête).
+- **Assistant du téléphone** : appui long sur le bouton latéral → Forge en écoute.
+- **Studio** (scripts enregistrés, PDF, Word, SRT, animation) et **Études** (cours PDF, fiches,
+  révision espacée, interrogation).
+- **Google Drive**, **indexation en arrière-plan**, **comics PDF**.
+- **Briefing du matin** (notification quotidienne).
+- **Voix neuronale hors-ligne** « Estelle » (Kyutai Pocket TTS, CC-BY 4.0).
+- Correctif : enregistrer les réglages n'écrase plus un modèle ou une voix installés depuis l'écran.
+
 ## 0.6.0 — 18/11/2026
 - **Voix plus naturelle** : phrases enchaînées sans blanc (file continue), moteur Google prioritaire,
   voix neuronales en ligne avec repli local hors-ligne, choix de la voix avec écoute d'essai,

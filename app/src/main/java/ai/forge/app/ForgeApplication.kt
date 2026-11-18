@@ -56,7 +56,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Dispatchers
 import java.util.UUID
 
-class ForgeApplication : Application() {
+class ForgeApplication : Application(), androidx.work.Configuration.Provider {
+    /** Initialisation de WorkManager à la demande : fiable quel que soit l'ordre de démarrage. */
+    override val workManagerConfiguration: androidx.work.Configuration
+        get() = androidx.work.Configuration.Builder().setMinimumLoggingLevel(android.util.Log.WARN).build()
+
     lateinit var container: AppContainer
         private set
 
@@ -313,10 +317,29 @@ class AppContainer(val app: Application) {
 
     /** Voix : préférences + meilleure voix selon la connexion (appelé au démarrage et au changement de réseau). */
     fun applyVoice() {
+        // Voix neuronale hors-ligne si installée ; sinon voix du système.
+        val path = settings.neuralVoicePath?.takeIf { java.io.File(it).canRead() }
+        val current = voice.neural
+        if (path == null) { current?.close(); voice.neural = null }
+        else if (current == null) voice.neural = ai.forge.app.voice.NeuralTtsOutput(path, app.cacheDir.absolutePath, settings.speechRate).also { it.warmUp() }
+        else current.speakingRate = (settings.speechRate / 1.15f).coerceIn(0.7f, 2.0f)
         voice.tts.preferredVoice = settings.voiceName
         voice.tts.allowNetworkVoices = settings.networkVoices
         voice.tts.speechRate = settings.speechRate
         scope.launch { voice.tts.selectBestVoice(networkAvailable.value) }
+    }
+
+    /** Installation de la voix neuronale (127 Mo) : téléchargement vérifié puis activation. */
+    val neuralVoiceInstall = MutableStateFlow<String?>(null)
+    fun installNeuralVoice() {
+        val m = DownloadableModel.POCKET_TTS_FR
+        scope.launch {
+            neuralVoiceInstall.value = "Téléchargement de la voix… 0 %"
+            when (val r = ModelDownloader().download(m, java.io.File(app.filesDir, "voices")) { d, t -> neuralVoiceInstall.value = "Téléchargement de la voix… ${d * 100 / t} %" }) {
+                is ModelDownloader.Result.Ready -> { updateSettings(settings.copy(neuralVoicePath = r.file.absolutePath)); neuralVoiceInstall.value = "Voix Estelle installée et activée." }
+                is ModelDownloader.Result.Failed -> neuralVoiceInstall.value = r.reason
+            }
+        }
     }
 
     fun newConversation() { conversation = ConversationContext(UUID.randomUUID().toString()) }

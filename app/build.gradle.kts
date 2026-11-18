@@ -15,8 +15,8 @@ android {
         // Galaxy S25 : Android 15 (One UI 7) et ultérieur. minSdk 31 conserve une marge raisonnable.
         minSdk = 31
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.6.0"
+        versionCode = 8
+        versionName = "0.7.0"
         // Galaxy S25 = arm64-v8a. Ajouter « x86_64 » pour un émulateur de développement.
         ndk { abiFilters += listOf("arm64-v8a") }
     }
@@ -70,6 +70,8 @@ dependencies {
     implementation(libs.mediapipe.genai)
     // LiteRT-LM : moteur de Google pour Gemma 4 sur GPU (plus rapide que MediaPipe).
     implementation(libs.litertlm)
+    // Voix neuronale hors-ligne (Pocket TTS) via la tâche MediaPipe TextToSpeech.
+    implementation(libs.mediapipe.audio)
     // Autorisation Google (OAuth, portée minimale) pour Google Drive.
     implementation(libs.play.services.auth)
     implementation(libs.kotlinx.coroutines.play.services)

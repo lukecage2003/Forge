@@ -44,6 +44,7 @@ fun SettingsScreen(container: AppContainer) {
     var youtubeKey by remember { mutableStateOf("") }
     var testResult by remember { mutableStateOf<String?>(null) }
     var saved by remember { mutableStateOf(false) }
+    var removeNeural by remember { mutableStateOf(false) }
     val brain by container.brain.collectAsState()
     val detail by container.brainDetail.collectAsState()
     var choice by remember { mutableStateOf(DownloadableModel.RECOMMENDED) }
@@ -178,6 +179,15 @@ fun SettingsScreen(container: AppContainer) {
 
         item {
             Section("Voix") {
+                val neuralState by container.neuralVoiceInstall.collectAsState()
+                Text("Voix neuronale hors-ligne", style = MaterialTheme.typography.titleMedium, color = ForgePalette.Text)
+                Hint("« Estelle » (Kyutai Pocket TTS, licence CC-BY 4.0) : voix naturelle, sur le téléphone, même sans Internet. 127 Mo.")
+                if (s.neuralVoicePath == null && neuralState?.startsWith("Voix Estelle installée") != true) GlassPill("Installer la voix Estelle") { container.installNeuralVoice() }
+                else Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Voix Estelle active", Modifier.weight(1f), color = ForgePalette.GoldSoft)
+                    TextButton(onClick = { s = s.copy(neuralVoicePath = null); removeNeural = true }) { Text("Utiliser la voix du téléphone", color = ForgePalette.TextMuted) }
+                }
+                neuralState?.let { Hint(it) }
                 VoicePicker(container, s.voiceName, s.networkVoices, onPick = { s = s.copy(voiceName = it) }, onNetwork = { s = s.copy(networkVoices = it) })
                 Text("Vitesse de parole : ${"%.2f".format(s.speechRate)}", color = ForgePalette.Text)
                 Slider(s.speechRate, { s = s.copy(speechRate = it) }, valueRange = 0.9f..2.0f,
@@ -205,7 +215,10 @@ fun SettingsScreen(container: AppContainer) {
                 if (braveKey.isNotBlank()) container.keys.put("brave", braveKey)
                 if (youtubeKey.isNotBlank()) container.keys.put("youtube", youtubeKey)
                 container.voice.tts.speechRate = s.speechRate
-                container.updateSettings(s)
+                // Les installations faites pendant que l'écran est ouvert (cerveau, voix) ne doivent pas être écrasées.
+                val latest = container.settings
+                container.updateSettings(s.copy(localModelPath = latest.localModelPath,
+                    neuralVoicePath = if (removeNeural) null else latest.neuralVoicePath))
                 saved = true
             }
         }

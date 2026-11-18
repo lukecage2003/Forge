@@ -30,6 +30,9 @@ class VoiceCoordinator(
     private val conversation: () -> ConversationContext,
 ) {
     val tts = AndroidTtsOutput(context)
+    /** Voix neuronale hors-ligne (null = non installée ou désactivée). */
+    @Volatile var neural: NeuralTtsOutput? = null
+    private val output = SwitchableSpeechOutput { neural ?: tts }
     val partialTranscript = MutableStateFlow("")
     val lastError = MutableStateFlow<String?>(null)
     val transcript = MutableStateFlow<List<Pair<String, String>>>(emptyList())
@@ -53,7 +56,7 @@ class VoiceCoordinator(
 
     private val controller: VoiceSessionController = VoiceSessionController(
         scope = scope,
-        output = tts,
+        output = output,
         source = ResponseSource { utterance ->
             orchestrator().handle(utterance, conversation(), voice = true)
                 .filterIsInstance<OrchestratorEvent.Token>()
