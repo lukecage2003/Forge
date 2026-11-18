@@ -167,6 +167,11 @@ fun SettingsScreen(container: AppContainer) {
                         Hint("En haut de l'écran, par-dessus vos applications : votre voix en onde dorée, puis la réponse de Forge.") }
                     Switch(s.islandEnabled, { s = s.copy(islandEnabled = it) }, colors = switchColors)
                 }
+                if (s.islandEnabled) Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) { Text("Pastille en veille", color = ForgePalette.Text)
+                        Hint("Petite pastille autour de la caméra même quand Forge attend. Désactivé : la bulle n'apparaît que quand vous dites « Forge ».") }
+                    Switch(s.islandIdleVisible, { s = s.copy(islandIdleVisible = it) }, colors = switchColors)
+                }
                 if (s.islandEnabled && !overlayOk) GlassPill("Autoriser l'affichage par-dessus les applications") {
                     ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:" + ctx.packageName))
                         .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))

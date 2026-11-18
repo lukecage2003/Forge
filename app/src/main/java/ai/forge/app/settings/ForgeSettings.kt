@@ -39,6 +39,8 @@ data class ForgeSettings(
     val neuralVoicePath: String? = null,
     /** Bulle animée par-dessus les applications pendant que Forge écoute ou parle. */
     val islandEnabled: Boolean = true,
+    /** Pastille visible en permanence pendant la veille (sinon la bulle n'apparaît qu'au réveil). */
+    val islandIdleVisible: Boolean = false,
     /** Veille : Forge se réveille quand on dit « Forge ». */
     val wakeStandby: Boolean = false,
     /** Exigence du détecteur (0,4 sensible … 0,8 strict). */
@@ -73,6 +75,7 @@ data class ForgeSettings(
                 morningBriefing = p.getBoolean("briefing", false),
                 neuralVoicePath = p.getString("neuralVoice", null),
                 islandEnabled = p.getBoolean("island", true),
+                islandIdleVisible = p.getBoolean("islandIdle", false),
                 wakeStandby = p.getBoolean("wakeStandby", false),
                 wakeStrictness = p.getFloat("wakeStrictness", 0.55f).toDouble(),
             )
@@ -95,7 +98,7 @@ data class ForgeSettings(
             .putFloat("cloudBudget", cloudMonthlyBudget?.toFloat() ?: -1f)
             .putString("searxngUrl", searxngUrl)
             .putBoolean("wakeWord", requireWakeWord).putBoolean("bargeIn", bargeInWithoutHeadset).putBoolean("networkVoices", networkVoices).putBoolean("rateMigrated", true).putBoolean("briefing", morningBriefing).putString("neuralVoice", neuralVoicePath)
-            .putBoolean("island", islandEnabled).putBoolean("wakeStandby", wakeStandby).putFloat("wakeStrictness", wakeStrictness.toFloat())
+            .putBoolean("island", islandEnabled).putBoolean("islandIdle", islandIdleVisible).putBoolean("wakeStandby", wakeStandby).putFloat("wakeStrictness", wakeStrictness.toFloat())
             .apply()
     }
 }

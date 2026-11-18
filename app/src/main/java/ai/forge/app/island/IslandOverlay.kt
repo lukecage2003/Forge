@@ -39,7 +39,9 @@ class IslandOverlay(private val context: Context, private val owner: LifecycleOw
     fun show() {
         if (view != null || !Settings.canDrawOverlays(context)) return
         val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT,
+            // Fenêtre à la taille exacte de la bulle : les touchers autour (barre d'état, volet des
+            // notifications, haut des applications) passent normalement.
+            WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
@@ -48,6 +50,8 @@ class IslandOverlay(private val context: Context, private val owner: LifecycleOw
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             if (Build.VERSION.SDK_INT >= 30) layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
         }
+        val geo = geometry()
+        params.x = geo.centerOffsetPx
         val v = ComposeView(context).apply {
             setViewTreeLifecycleOwner(owner)
             setViewTreeSavedStateRegistryOwner(savedState)
@@ -58,13 +62,30 @@ class IslandOverlay(private val context: Context, private val owner: LifecycleOw
                     val heard by container.voice.partialTranscript.collectAsState()
                     val reply by container.voice.responseText.collectAsState()
                     val big by expanded.collectAsState()
-                    ForgeIsland(IslandState(presence, level, heard, reply, big),
+                    ForgeIsland(IslandState(presence, level, heard, reply, big), compactHeight = geo.compactHeight,
                         onTap = { context.startActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) },
                         onDismiss = { onDismiss() })
                 }
             }
         }
         runCatching { wm.addView(v, params); view = v }
+    }
+
+    /** Position de la caméra frontale et hauteur de la barre d'état, pour coller au matériel. */
+    private data class Geometry(val centerOffsetPx: Int, val compactHeight: androidx.compose.ui.unit.Dp)
+
+    private fun geometry(): Geometry {
+        val density = context.resources.displayMetrics.density
+        return runCatching {
+            val m = wm.currentWindowMetrics
+            val insets = m.windowInsets
+            val statusTop = insets.getInsets(android.view.WindowInsets.Type.statusBars()).top
+            val cutout = insets.displayCutout?.boundingRectTop?.takeIf { !it.isEmpty }
+            val offset = cutout?.let { it.centerX() - m.bounds.width() / 2 } ?: 0
+            // Pastille un peu moins haute que la barre d'état : elle entoure la caméra sans déborder.
+            val h = ((statusTop / density) - 6f).coerceIn(26f, 40f)
+            Geometry(offset, androidx.compose.ui.unit.Dp(h))
+        }.getOrDefault(Geometry(0, androidx.compose.ui.unit.Dp(30f)))
     }
 
     fun hide() { view?.let { runCatching { wm.removeViewImmediate(it) } }; view = null }

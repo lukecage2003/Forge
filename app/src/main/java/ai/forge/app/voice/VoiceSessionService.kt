@@ -18,6 +18,8 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.ProcessLifecycleOwner
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 /**
  * Service de premier plan « microphone », deux modes :
@@ -32,6 +34,8 @@ class VoiceSessionService : LifecycleService() {
     private var standby = false
     private var inTurn = false
     private var appVisible = true
+    private var lingering = false
+    private var lingerJob: kotlinx.coroutines.Job? = null
 
     private val visibility = object : DefaultLifecycleObserver {
         override fun onStart(owner: LifecycleOwner) { appVisible = true; updateIsland() }
@@ -72,20 +76,27 @@ class VoiceSessionService : LifecycleService() {
     }
 
     private fun onWake() {
+        lingerJob?.cancel(); lingering = false
         inTurn = true
         runCatching { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 35).startTone(ToneGenerator.TONE_PROP_ACK, 120) }
         overlay?.expanded?.value = true
         updateIsland()
         container.voice.startTurn(onEnded = {
             inTurn = false
-            overlay?.expanded?.value = false
-            if (standby) startWake() else shutdown()
-            updateIsland()
+            if (standby) startWake() else { shutdown(); return@startTurn }
+            // La fin de la réponse reste lisible un instant, puis la bulle se retire.
+            lingerJob?.cancel()
+            lingerJob = lifecycleScope.launch {
+                lingering = true; updateIsland()
+                kotlinx.coroutines.delay(2_500)
+                lingering = false; overlay?.expanded?.value = false; updateIsland()
+            }
         })
     }
 
     private fun endTurnEarly() {
-        if (!inTurn) return
+        lingerJob?.cancel(); lingering = false
+        if (!inTurn) { updateIsland(); return }
         container.voice.stop(); inTurn = false
         overlay?.expanded?.value = false
         if (standby) startWake()
@@ -94,7 +105,11 @@ class VoiceSessionService : LifecycleService() {
 
     /** Bulle visible hors de l'application (dans Forge, l'écran affiche déjà l'orbe). */
     private fun updateIsland() {
-        val wanted = container.settings.islandEnabled && !appVisible && (standby || inTurn || container.voice.state.value != ai.forge.voice.VoiceState.IDLE)
+        // Hors conversation, la veille reste discrète : rien au-dessus de la barre d'état, sauf si
+        // l'utilisateur a choisi la pastille permanente.
+        val talking = inTurn || lingering || container.voice.state.value != ai.forge.voice.VoiceState.IDLE
+        val wanted = container.settings.islandEnabled && !appVisible && (talking || (standby && container.settings.islandIdleVisible))
+        overlay?.expanded?.value = talking
         if (wanted) overlay?.show() else overlay?.hide()
     }
 

@@ -1,5 +1,13 @@
 # Historique des versions
 
+## 0.8.2 — 18/11/2026
+- **Bulle : correction de l'affichage en haut de l'écran.**
+  - En veille, plus de capsule noire permanente sur la barre d'état : la bulle n'apparaît qu'au
+    mot « Forge » et se retire 2,5 s après la réponse (pastille permanente en option).
+  - La fenêtre a la taille exacte de la bulle : la barre d'état, le volet des notifications et le
+    haut des applications restent utilisables autour.
+  - Pastille compacte centrée sur la caméra et à la hauteur de la barre d'état du téléphone.
+
 ## 0.8.1 — 18/11/2026
 - **Recherches beaucoup plus rapides** :
   - Wikipédia et les wikis Marvel/DC renvoient le texte des articles dans la même requête que la

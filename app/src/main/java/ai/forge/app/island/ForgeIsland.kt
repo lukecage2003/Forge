@@ -53,31 +53,33 @@ data class IslandState(
  * Compacte = veille ; élargie = écoute (onde qui suit la voix) ; grande = réponse en cours.
  */
 @Composable
-fun ForgeIsland(s: IslandState, onTap: () -> Unit, onDismiss: () -> Unit) {
+fun ForgeIsland(s: IslandState, onTap: () -> Unit, onDismiss: () -> Unit, compactHeight: androidx.compose.ui.unit.Dp = 30.dp) {
     val speaking = s.presence == PresenceState.RESPONDING && s.reply.isNotBlank()
     val listening = s.presence == PresenceState.LISTENING || s.presence == PresenceState.UNDERSTANDING
-    val width = when { !s.expanded -> 128.dp; speaking -> 380.dp; else -> 320.dp }
+    // Compacte : à peine plus large que la caméra ; élargie : limitée à la largeur de l'écran.
+    val width = when { !s.expanded -> 104.dp; speaking -> 380.dp; else -> 320.dp }
     val glow by animateFloatAsState(if (listening) 0.35f + 0.65f * s.level else if (s.expanded) 0.35f else 0f, tween(120), label = "glow")
-    val shape = RoundedCornerShape(if (s.expanded) 30.dp else 20.dp)
+    val shape = RoundedCornerShape(if (s.expanded) 30.dp else compactHeight / 2)
 
-    Box(Modifier.padding(top = 6.dp).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+    Box(Modifier.padding(top = if (s.expanded) 6.dp else 3.dp).padding(horizontal = 8.dp), contentAlignment = Alignment.TopCenter) {
         Box(
             Modifier
                 .animateContentSize(spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow))
-                .width(width)
-                .heightIn(min = 36.dp)
+                .widthIn(max = width).width(width)
+                .then(if (s.expanded) Modifier.heightIn(min = 36.dp) else Modifier.height(compactHeight))
                 .clip(shape)
                 .background(Color.Black)
                 .border(1.dp, Brush.horizontalGradient(listOf(ForgePalette.Gold.copy(alpha = glow * 0.9f), ForgePalette.AuroraEmber.copy(alpha = glow * 0.6f),
                     ForgePalette.Gold.copy(alpha = glow * 0.9f))), shape)
                 .pointerInput(Unit) { detectTapGestures(onTap = { onTap() }) }
                 .pointerInput(Unit) { detectVerticalDragGestures { _, drag -> if (drag < -12) onDismiss() } }
-                .padding(horizontal = 12.dp, vertical = if (s.expanded) 10.dp else 6.dp),
+                .padding(horizontal = if (s.expanded) 12.dp else 8.dp, vertical = if (s.expanded) 10.dp else 3.dp),
         ) {
-            if (!s.expanded) Row(verticalAlignment = Alignment.CenterVertically) {
-                ForgeOrb(s.presence, s.level, size = 22.dp)
+            if (!s.expanded) Row(Modifier.fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
+                // Orbe à gauche, onde à droite : le centre reste libre pour la caméra.
+                ForgeOrb(s.presence, s.level, size = 18.dp)
                 Spacer(Modifier.weight(1f))
-                Waveform(s.level, active = listening, bars = 5, modifier = Modifier.height(16.dp).width(36.dp))
+                Waveform(s.level, active = listening, bars = 4, modifier = Modifier.height(12.dp).width(24.dp))
             } else Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     ForgeOrb(s.presence, s.level, size = 30.dp)
