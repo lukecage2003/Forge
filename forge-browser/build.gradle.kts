@@ -6,5 +6,6 @@ dependencies {
     api(project(":forge-research"))
     implementation(libs.okhttp)
     implementation(libs.jsoup)
+    compileOnly(libs.jspecify)
     testImplementation(libs.okhttp.mockwebserver)
 }

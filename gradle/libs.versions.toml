@@ -1,17 +1,19 @@
 [versions]
-kotlin = "2.1.21"
-agp = "8.9.3"
-coroutines = "1.10.2"
-serialization = "1.8.1"
+kotlin = "2.4.21"
+agp = "8.13.2"
+coroutines = "1.11.0"
+serialization = "1.13.0"
 okhttp = "4.12.0"
 jsoup = "1.18.3"
-composeBom = "2025.05.01"
-activityCompose = "1.10.1"
-lifecycle = "2.9.0"
-room = "2.7.1"
-ksp = "2.1.21-2.0.1"
+jspecify = "1.0.0"
+composeBom = "2026.01.01"
+activityCompose = "1.11.0"
+lifecycle = "2.9.4"
+room = "2.8.5"
+ksp = "2.3.14"
 datastore = "1.1.7"
 mediapipeGenai = "0.10.24"
+litertlm = "0.19.1"
 playServicesAuth = "21.3.0"
 robolectric = "4.14.1"
 mlkitText = "16.0.1"
@@ -23,6 +25,7 @@ kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutine
 kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+jspecify = { module = "org.jspecify:jspecify", version.ref = "jspecify" }
 jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 okhttp-mockwebserver = { module = "com.squareup.okhttp3:mockwebserver", version.ref = "okhttp" }
@@ -38,6 +41,7 @@ room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
+litertlm = { module = "com.google.ai.edge.litertlm:litertlm-android", version.ref = "litertlm" }
 mediapipe-genai = { module = "com.google.mediapipe:tasks-genai", version.ref = "mediapipeGenai" }
 play-services-auth = { module = "com.google.android.gms:play-services-auth", version.ref = "playServicesAuth" }
 

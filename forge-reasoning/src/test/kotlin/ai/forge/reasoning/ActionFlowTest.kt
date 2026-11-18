@@ -119,3 +119,20 @@ class LibraryFlowTest {
         assertTrue(done.contains("[B1] Black Panther #8 (2016), p. 2 — piste OCR, page à consulter"), done)
     }
 }
+
+class OnDeviceSpeedTest {
+    @Test fun expertQuestionOnDeviceIsSinglePassAndStreamed() = runTest {
+        val p = ScriptedProvider(capabilities = ProviderCapabilities(Locality.ON_DEVICE, 32_000, reasoningQuality = 4)) { "Réponse directe." }
+        val o = Orchestrator(ProviderRouter(listOf(p)), MemoryManager(InMemoryMemoryStore(), HashingEmbedder()))
+        val ev = o.handle("Analyse pourquoi exactement la stratégie a échoué", ConversationContext("s"), voice = false).toList()
+        assertEquals(1, p.requests.size)                     // une seule passe
+        assertTrue(ev.none { it is OrchestratorEvent.QualityReview })
+    }
+
+    @Test fun comicsStillVerifiedEvenOnDevice() = runTest {
+        val p = ScriptedProvider(capabilities = ProviderCapabilities(Locality.ON_DEVICE, 32_000, reasoningQuality = 4)) { "VERDICT: OK\nPROBLEMES: aucun" }
+        val o = Orchestrator(ProviderRouter(listOf(p)), MemoryManager(InMemoryMemoryStore(), HashingEmbedder()))
+        val ev = o.handle("Dans quel comic Black Panther absorbe l'énergie ?", ConversationContext("s2"), voice = false).toList()
+        assertTrue(ev.any { it is OrchestratorEvent.QualityReview })
+    }
+}

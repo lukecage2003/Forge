@@ -5,6 +5,8 @@ import ai.forge.app.actions.OpenAppTool
 import ai.forge.app.actions.SetAlarmTool
 import ai.forge.app.actions.ShareTextTool
 import ai.forge.app.llm.MediaPipeLocalProvider
+import ai.forge.app.llm.LiteRtLmProvider
+import ai.forge.models.LocalRuntime
 import ai.forge.app.memory.ForgeDatabase
 import ai.forge.app.memory.RoomMemoryStore
 import ai.forge.app.settings.ForgeSettings
@@ -71,7 +73,7 @@ class ForgeApplication : Application() {
 }
 
 /** Assemblage des dépendances (injection manuelle : simple, explicite, sans magie). */
-class AppContainer(private val app: Application) {
+class AppContainer(val app: Application) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     val keys = SecureKeyStore(app)
     var settings: ForgeSettings = ForgeSettings.load(app)
@@ -109,7 +111,7 @@ class AppContainer(private val app: Application) {
     }
 
     // Un seul moteur local résident : réutilisé entre reconstructions, fermé quand le modèle change.
-    private var localProvider: MediaPipeLocalProvider? = null
+    private var localProvider: LlmProvider? = null
     private var localProviderPath: String? = null
 
     var conversation = ConversationContext(UUID.randomUUID().toString())
@@ -122,14 +124,43 @@ class AppContainer(private val app: Application) {
 
 
     @Synchronized
-    private fun localModel(): MediaPipeLocalProvider? {
+    private fun localModel(): LlmProvider? {
         val path = settings.localModelPath
-        if (path != localProviderPath) { localProvider?.release(); localProvider = path?.let { MediaPipeLocalProvider(app, it) }; localProviderPath = path }
+        if (path != localProviderPath) {
+            releaseLocal()
+            localProvider = path?.let { p ->
+                val name = java.io.File(p).name
+                val known = DownloadableModel.byFileName(name)
+                when (LocalRuntime.forFile(name)) {
+                    LocalRuntime.LITERT_LM -> LiteRtLmProvider(p, app.cacheDir.absolutePath, quality = known?.quality ?: 3,
+                        displayName = "${known?.displayName ?: "Modèle local"} (sur le téléphone)")
+                    LocalRuntime.MEDIAPIPE -> MediaPipeLocalProvider(app, p)
+                }
+            }
+            localProviderPath = path
+        }
         return localProvider
     }
 
+    private fun releaseLocal() = when (val p = localProvider) {
+        is LiteRtLmProvider -> p.release()
+        is MediaPipeLocalProvider -> p.release()
+        else -> Unit
+    }
+
     /** Pression mémoire signalée par Android : on libère le modèle local (rechargé à la demande). */
-    fun onLowMemory() { localProvider?.release() }
+    fun onLowMemory() { releaseLocal() }
+
+    /** Charge le modèle en arrière-plan pour que la première réponse soit immédiate. */
+    fun warmUpLocalModel() {
+        val p = localModel() as? LiteRtLmProvider ?: return
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            brainDetail.value = "Préparation du modèle…"
+            brainDetail.value = p.warmUp().fold({ "Prêt · $it" }, { "Échec du chargement : ${it.message}" })
+        }
+    }
+    /** Ligne d'état affichable : moteur prêt, GPU/CPU, erreur. */
+    val brainDetail = MutableStateFlow<String?>(null)
 
     fun providers(): List<LlmProvider> = buildList {
         localModel()?.let { add(it) }
@@ -203,17 +234,19 @@ class AppContainer(private val app: Application) {
     /** Réseau facturé au volume (données mobiles) : on prévient avant 1,6 Go. */
     fun onMeteredNetwork(): Boolean = app.getSystemService(ConnectivityManager::class.java).isActiveNetworkMetered
 
-    /** Télécharge le modèle recommandé (libre, sans compte), le vérifie puis l'active. */
-    fun installRecommendedBrain() {
+    /** Télécharge un modèle du catalogue (libre, sans compte), le vérifie puis l'active. */
+    fun installBrain(model: DownloadableModel = DownloadableModel.RECOMMENDED) {
         if (brain.value is BrainState.Downloading) return
-        val model = DownloadableModel.RECOMMENDED
         brain.value = BrainState.Downloading(0, model.sizeBytes)
         scope.launch {
             val r = ModelDownloader().download(model, java.io.File(app.filesDir, "models")) { done, total ->
                 brain.value = BrainState.Downloading(done, total)
             }
             when (r) {
-                is ModelDownloader.Result.Ready -> { updateSettings(settings.copy(localModelPath = r.file.absolutePath)); brain.value = BrainState.Ready }
+                is ModelDownloader.Result.Ready -> {
+                    updateSettings(settings.copy(localModelPath = r.file.absolutePath)); brain.value = BrainState.Ready
+                    warmUpLocalModel()
+                }
                 is ModelDownloader.Result.Failed -> brain.value = BrainState.Error(r.reason)
             }
         }

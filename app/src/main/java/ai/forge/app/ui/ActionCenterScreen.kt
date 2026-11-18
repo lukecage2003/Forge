@@ -19,25 +19,23 @@ import java.util.Date
 fun ActionCenterScreen(container: AppContainer) {
     val log by container.actions.log.collectAsState()
     val killed by container.actions.killSwitchEngaged.collectAsState()
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Action Center", style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(8.dp))
-        if (killed) {
-            Text("Arrêt d'urgence actif : aucune action ne sera lancée.", color = ForgePalette.Error)
-            OutlinedButton(onClick = { container.actions.releaseKillSwitch() }) { Text("Réactiver les actions") }
-        } else {
-            Button(onClick = { container.emergencyStop() }, colors = ButtonDefaults.buttonColors(containerColor = ForgePalette.Error)) {
-                Text("ARRÊT D'URGENCE")
+    Column(Modifier.fillMaxSize()) {
+        LargeTitle("Actions", "Plafond : ${container.gate.ceiling.label}")
+        Column(Modifier.padding(horizontal = 16.dp)) {
+            if (killed) {
+                Text("Arrêt d'urgence actif : aucune action ne sera lancée.", color = ForgePalette.Error)
+                Spacer(Modifier.height(8.dp))
+                GlassPill("Réactiver les actions") { container.actions.releaseKillSwitch() }
+            } else {
+                Button(onClick = { container.emergencyStop() }, Modifier.fillMaxWidth().height(52.dp), shape = androidx.compose.foundation.shape.CircleShape,
+                    colors = ButtonDefaults.buttonColors(containerColor = ForgePalette.Error.copy(alpha = 0.85f))) { Text("Arrêt d'urgence", style = MaterialTheme.typography.labelLarge) }
             }
+            if (log.isEmpty()) Text("Aucune action pour l'instant. Essayez : « Mets un réveil à 7 h ».", Modifier.padding(top = 16.dp), color = ForgePalette.TextMuted)
         }
-        Spacer(Modifier.height(12.dp))
-        Text("Plafond d'autonomie : ${container.gate.ceiling.label}", color = ForgePalette.TextMuted)
-        Spacer(Modifier.height(12.dp))
-        if (log.isEmpty()) Text("Aucune action pour l'instant.", color = ForgePalette.TextMuted)
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = TabBarSpace + 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(log.reversed()) { e ->
-                Card(colors = CardDefaults.cardColors(containerColor = ForgePalette.Surface)) {
-                    Column(Modifier.padding(12.dp)) {
+                GlassSurface(Modifier.fillMaxWidth(), shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)) {
+                    Column(Modifier.padding(14.dp)) {
                         Text("${e.tool} — ${statusLabel(e.status)}", color = if (e.status == ActionStatus.SUCCEEDED) ForgePalette.Gold else ForgePalette.Text)
                         Text(e.outcome, style = MaterialTheme.typography.bodySmall)
                         Text("Motif : ${e.rationale} · ${DateFormat.getTimeInstance().format(Date(e.startedAtMs))}",

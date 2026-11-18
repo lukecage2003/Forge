@@ -37,28 +37,25 @@ fun MemoryScreen(container: AppContainer) {
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Mémoire", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            OutlinedButton(onClick = { export.launch("forge-memoire.json") }) { Text("Exporter") }
+    Column(Modifier.fillMaxSize()) {
+        LargeTitle("Mémoire", "Forge ne retient que ce que vous lui demandez.") {
+            GlassPill("Exporter") { export.launch("forge-memoire.json") }
         }
-        Text("Forge ne retient que ce que vous lui demandez de retenir. Tout est supprimable.",
-            style = MaterialTheme.typography.bodySmall, color = ForgePalette.TextMuted)
-        message?.let { Text(it, color = ForgePalette.Gold) }
-        Spacer(Modifier.height(8.dp))
-        if (items.isEmpty()) Text("Aucun souvenir.", color = ForgePalette.TextMuted)
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        message?.let { Text(it, Modifier.padding(horizontal = 20.dp), color = ForgePalette.Gold) }
+        if (items.isEmpty()) Text("Aucun souvenir pour l'instant. Dites par exemple : « Souviens-toi que ma chaîne s'appelle Primestone Media ».",
+            Modifier.padding(20.dp), style = MaterialTheme.typography.bodyMedium, color = ForgePalette.TextMuted)
+        LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = TabBarSpace + 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(items, key = { it.id }) { m ->
-                Card(colors = CardDefaults.cardColors(containerColor = ForgePalette.Surface)) {
-                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                GlassSurface(Modifier.fillMaxWidth(), shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)) {
+                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(m.text)
+                            Text(m.text, style = MaterialTheme.typography.bodyLarge, color = ForgePalette.Text)
                             Text("${m.kind.label}${m.project?.let { " · projet $it" } ?: ""} · source : ${m.provenance.type.name.lowercase()} · " +
                                 DateFormat.getDateInstance().format(Date(m.updatedAtMs)),
                                 style = MaterialTheme.typography.labelSmall, color = ForgePalette.TextMuted)
                         }
                         IconButton(onClick = { scope.launch { container.memory.forget(m.id); reload(); message = "Souvenir supprimé." } }) {
-                            Icon(Icons.Default.Delete, "Supprimer ce souvenir")
+                            Icon(Icons.Default.Delete, "Supprimer ce souvenir", tint = ForgePalette.TextMuted)
                         }
                     }
                 }

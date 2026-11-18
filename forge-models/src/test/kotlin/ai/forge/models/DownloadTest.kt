@@ -17,7 +17,7 @@ class DownloadTest {
     @Test fun resumesAfterInterruptionAndVerifiesIntegrity() = runTest {
         MockWebServer().use { server ->
             server.start()
-            val model = DownloadableModel("m", "Test", server.url("/m.task").toString(), "m.task", content.size.toLong(), sha, "MIT", 100)
+            val model = DownloadableModel("m", "Test", "", server.url("/m.task").toString(), "m.task", content.size.toLong(), sha, "MIT", 100, 2, 1024)
             val dir = createTempDirectory("models").toFile()
             // Première tentative coupée à 4 000 octets.
             java.io.File(dir, "m.task.part").writeBytes(content.copyOfRange(0, 4_000))
@@ -37,7 +37,7 @@ class DownloadTest {
             server.start()
             val bad = content.copyOf().also { it[5] = 99 }
             server.enqueue(MockResponse().setBody(Buffer().write(bad)))
-            val model = DownloadableModel("m", "Test", server.url("/m.task").toString(), "m.task", content.size.toLong(), sha, "MIT", 100)
+            val model = DownloadableModel("m", "Test", "", server.url("/m.task").toString(), "m.task", content.size.toLong(), sha, "MIT", 100, 2, 1024)
             val dir = createTempDirectory("models2").toFile()
             val r = ModelDownloader().download(model, dir)
             assertIs<ModelDownloader.Result.Failed>(r)
@@ -48,7 +48,10 @@ class DownloadTest {
 
     @Test fun templatesMatchModelFamilies() {
         val msgs = listOf(ChatMessage(Role.SYSTEM, "Tu es Forge."), ChatMessage(Role.USER, "Salut"))
-        assertEquals(PromptTemplate.CHATML, PromptTemplate.forModelFile(DownloadableModel.RECOMMENDED.fileName))
+        assertEquals(PromptTemplate.CHATML, PromptTemplate.forModelFile(DownloadableModel.QWEN25_1_5B.fileName))
+        assertEquals(LocalRuntime.LITERT_LM, DownloadableModel.RECOMMENDED.runtime)
+        assertEquals(LocalRuntime.MEDIAPIPE, DownloadableModel.QWEN25_1_5B.runtime)
+        assertTrue(DownloadableModel.CATALOG.all { it.sha256.length == 64 && it.url.endsWith(it.fileName) && it.license == "Apache 2.0" })
         assertEquals(PromptTemplate.GEMMA, PromptTemplate.forModelFile("gemma3-1b-it-int4.task"))
         assertEquals("<|im_start|>system\nTu es Forge.<|im_end|>\n<|im_start|>user\nSalut<|im_end|>\n<|im_start|>assistant\n",
             PromptTemplate.CHATML.render(msgs))

@@ -8,15 +8,15 @@ plugins {
 
 android {
     namespace = "ai.forge.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "ai.forge.app"
         // Galaxy S25 : Android 15 (One UI 7) et ultérieur. minSdk 31 conserve une marge raisonnable.
         minSdk = 31
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.3.1"
+        versionCode = 5
+        versionName = "0.4.0"
         // Galaxy S25 = arm64-v8a. Ajouter « x86_64 » pour un émulateur de développement.
         ndk { abiFilters += listOf("arm64-v8a") }
     }
@@ -31,7 +31,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
     testOptions { unitTests.isIncludeAndroidResources = true }
@@ -65,6 +64,8 @@ dependencies {
 
     // Inférence locale sur l'appareil (modèles Gemma au format .task).
     implementation(libs.mediapipe.genai)
+    // LiteRT-LM : moteur de Google pour Gemma 4 sur GPU (plus rapide que MediaPipe).
+    implementation(libs.litertlm)
     // Autorisation Google (OAuth, portée minimale) pour Google Drive.
     implementation(libs.play.services.auth)
     implementation(libs.kotlinx.coroutines.play.services)
@@ -92,3 +93,5 @@ tasks.withType<Test>().configureEach {
     systemProperty("robolectric.offline", "true")
     systemProperty("robolectric.dependency.dir", robolectricDir.get().asFile.absolutePath)
 }
+
+kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }

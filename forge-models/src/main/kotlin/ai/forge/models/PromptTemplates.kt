@@ -39,31 +39,60 @@ enum class PromptTemplate {
     }
 }
 
+/** Runtime capable d'exécuter un fichier de modèle. */
+enum class LocalRuntime { LITERT_LM, MEDIAPIPE;
+    companion object { fun forFile(name: String) = if (name.endsWith(".litertlm", true)) LITERT_LM else MEDIAPIPE }
+}
+
 /** Modèle local proposé au téléchargement : libre de droits, sans compte, empreinte connue. */
 data class DownloadableModel(
     val id: String,
     val displayName: String,
+    val tagline: String,
     val url: String,
     val fileName: String,
     val sizeBytes: Long,
     val sha256: String,
     val license: String,
     val ramMb: Int,
+    /** Qualité de raisonnement estimée (1–5), utilisée par le routeur. */
+    val quality: Int,
+    val contextTokens: Int,
 ) {
+    val runtime: LocalRuntime get() = LocalRuntime.forFile(fileName)
+
     companion object {
-        /**
-         * Choix par défaut : Qwen 2.5 1,5B Instruct (Alibaba), licence Apache 2.0, format MediaPipe,
-         * quantifié 8 bits, contexte 4096. Bon compromis taille/qualité/français pour un S25.
-         */
-        val RECOMMENDED = DownloadableModel(
-            id = "qwen2.5-1.5b-q8",
-            displayName = "Qwen 2.5 — 1,5 milliard de paramètres",
-            url = "https://huggingface.co/litert-community/Qwen2.5-1.5B-Instruct/resolve/main/Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv4096.task",
-            fileName = "Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv4096.task",
-            sizeBytes = 1_598_556_720,
-            sha256 = "82968d0a6c3872cf016fdbcfc591571605f4c7fd2b0f64d2533df502cc6596b3",
-            license = "Apache 2.0",
-            ramMb = 2_200,
+        private const val HF = "https://huggingface.co/litert-community"
+
+        /** Gemma 4 E4B (Google, Apache 2.0), version GPU : le plus capable qui tienne confortablement sur un S25. */
+        val GEMMA4_E4B = DownloadableModel(
+            id = "gemma4-e4b-gpu", displayName = "Gemma 4 · E4B", tagline = "Le plus intelligent — recommandé pour le Galaxy S25",
+            url = "$HF/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it-gpu.litertlm",
+            fileName = "gemma-4-E4B-it-gpu.litertlm", sizeBytes = 3_310_938_740,
+            sha256 = "ea168f5a601b543e02712f9381f26b06ddc7d4cbe2406410387c82d69b995a60",
+            license = "Apache 2.0", ramMb = 4_200, quality = 4, contextTokens = 4_096,
         )
+
+        /** Gemma 4 E2B, version GPU : plus léger et plus rapide. */
+        val GEMMA4_E2B = DownloadableModel(
+            id = "gemma4-e2b-gpu", displayName = "Gemma 4 · E2B", tagline = "Le plus rapide",
+            url = "$HF/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it-gpu.litertlm",
+            fileName = "gemma-4-E2B-it-gpu.litertlm", sizeBytes = 2_340_870_772,
+            sha256 = "d3cfec6ae2e027a994e51366d44dbf522ec7531a4a35fbbfcd3e9cc9b927afc1",
+            license = "Apache 2.0", ramMb = 3_000, quality = 3, contextTokens = 4_096,
+        )
+
+        /** Qwen 2.5 1,5B (MediaPipe) : très léger, gardé pour les appareils modestes. */
+        val QWEN25_1_5B = DownloadableModel(
+            id = "qwen2.5-1.5b-q8", displayName = "Qwen 2.5 · 1,5B", tagline = "Léger",
+            url = "$HF/Qwen2.5-1.5B-Instruct/resolve/main/Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv4096.task",
+            fileName = "Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv4096.task", sizeBytes = 1_598_556_720,
+            sha256 = "82968d0a6c3872cf016fdbcfc591571605f4c7fd2b0f64d2533df502cc6596b3",
+            license = "Apache 2.0", ramMb = 2_200, quality = 2, contextTokens = 4_096,
+        )
+
+        val RECOMMENDED = GEMMA4_E4B
+        val CATALOG = listOf(GEMMA4_E4B, GEMMA4_E2B, QWEN25_1_5B)
+        fun byFileName(name: String) = CATALOG.firstOrNull { it.fileName == name }
     }
 }

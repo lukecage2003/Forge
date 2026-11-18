@@ -8,6 +8,7 @@ import ai.forge.models.LlmEvent
 import ai.forge.models.LlmProvider
 import ai.forge.models.ProviderRouter
 import ai.forge.models.RoutingNeeds
+import ai.forge.models.Locality
 import ai.forge.models.complete
 import ai.forge.memory.MemoryCandidateExtractor
 import ai.forge.memory.MemoryHit
@@ -109,10 +110,14 @@ class Orchestrator(
             emit(OrchestratorEvent.Failed("Aucun moteur disponible pour cette demande (${dataClass.label}). Détail : ${router.explain(needs)}"))
             return@flow
         }
+        // Sur un modèle embarqué, chaque passe coûte plusieurs secondes : une seule passe diffusée
+        // immédiatement, sauf là où le contrôle protège contre l'invention (comics, éditorial, recherche).
+        val onDevice = provider.capabilities.locality == Locality.ON_DEVICE
+        val verify = intent.needsVerification && (!onDevice || intent.primary in GUARDED)
         val steps = buildList {
-            if (intent.depth >= ThinkingDepth.DEEP_RESEARCH) addAll(intent.supporting)
+            if (intent.depth >= ThinkingDepth.DEEP_RESEARCH && !onDevice) addAll(intent.supporting)
             add(intent.primary)
-            if (intent.needsVerification) add(SpecialistId.QUALITY_CONTROL)
+            if (verify) add(SpecialistId.QUALITY_CONTROL)
         }
         emit(OrchestratorEvent.Planned(intent, provider.displayName, steps))
         val securityRule = if (externalUsed) UntrustedContent.SYSTEM_RULE else null
@@ -168,7 +173,7 @@ class Orchestrator(
             .joinToString("\n\n").ifEmpty { null }
         val sourcesFooter = bibliography?.let { if (voice) "" else "\n\nSources consultées :\n$it" }.orEmpty()
 
-        if (!intent.needsVerification) {
+        if (!verify) {
             // Diffusion directe (latence minimale).
             val text = StringBuilder()
             var failed: String? = null
@@ -293,6 +298,10 @@ class Orchestrator(
                 if (f.isNotEmpty()) onSuspicious(h.item.provenance.reference, f.map { it.pattern })
             }
         return text to external
+    }
+
+    private companion object {
+        val GUARDED = setOf(SpecialistId.COMICS, SpecialistId.EDITORIAL, SpecialistId.RESEARCH)
     }
 
     internal fun parseReview(text: String): Pair<String, String> {

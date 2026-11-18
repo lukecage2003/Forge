@@ -43,29 +43,29 @@ fun LibraryScreen(container: AppContainer) {
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Bibliothèque", style = MaterialTheme.typography.titleLarge)
-        Text("Choisissez des fichiers CBZ : ils sont lus et indexés sur le téléphone, rien n'est envoyé ailleurs.",
-            style = MaterialTheme.typography.bodySmall, color = ForgePalette.TextMuted)
-        Spacer(Modifier.height(8.dp))
-        Button(onClick = { picker.launch(arrayOf("application/zip", "application/x-cbz", "application/vnd.comicbook+zip", "application/octet-stream")) }) {
-            Text("Ajouter des comics (CBZ)")
+    Column(Modifier.fillMaxSize()) {
+        LargeTitle("Comics", "Votre bibliothèque, lue sur le téléphone.")
+        Column(Modifier.padding(horizontal = 16.dp)) {
+            GoldButton("Ajouter des comics (CBZ)", Modifier.fillMaxWidth()) {
+                picker.launch(arrayOf("application/zip", "application/x-cbz", "application/vnd.comicbook+zip", "application/octet-stream"))
+            }
+            Text("Les fichiers restent sur votre téléphone. Forge lit les pages et vous indique toujours le numéro et la page.",
+                Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall, color = ForgePalette.TextMuted)
+            progress?.let { Text(it, color = ForgePalette.Gold, modifier = Modifier.padding(top = 8.dp)) }
         }
-        progress?.let { Text(it, color = ForgePalette.Gold, modifier = Modifier.padding(top = 8.dp)) }
-        Spacer(Modifier.height(8.dp))
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = TabBarSpace + 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(files, key = { it.fileId }) { f ->
-                Card(colors = CardDefaults.cardColors(containerColor = ForgePalette.Surface)) {
-                    Column(Modifier.padding(12.dp)) {
-                        Text(f.reference.display())
+                GlassSurface(Modifier.fillMaxWidth(), shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)) {
+                    Column(Modifier.padding(14.dp)) {
+                        Text(f.reference.display(), style = MaterialTheme.typography.titleMedium, color = ForgePalette.Text)
                         Text(when (f.status) {
                             IndexStatus.INDEXED -> "${f.pageCount} pages indexées"
                             IndexStatus.FAILED -> "Échec : ${f.error}"
                             else -> "En attente"
                         }, style = MaterialTheme.typography.labelSmall, color = if (f.status == IndexStatus.FAILED) ForgePalette.Error else ForgePalette.TextMuted)
-                        TextButton(onClick = { scope.launch { container.library.forget(f.fileId); files = container.library.index.all(); container.refreshTools() } }) {
-                            Text("Retirer de l'index")
-                        }
+                        Text("Retirer de l'index", Modifier.padding(top = 6.dp).clickableNoRipple {
+                            scope.launch { container.library.forget(f.fileId); files = container.library.index.all(); container.refreshTools() }
+                        }, style = MaterialTheme.typography.labelMedium, color = ForgePalette.GoldSoft)
                     }
                 }
             }

@@ -1,5 +1,16 @@
 # Historique des versions
 
+## 0.4.0 — 18/11/2026
+- **Cerveau plus puissant** : Gemma 4 E4B (recommandé) et E2B (rapide), Google, Apache 2.0, sans compte,
+  exécutés par LiteRT-LM sur le GPU du S25, repli CPU automatique, préchargement au démarrage,
+  annulation réelle de la génération.
+- **Plus rapide** : sur le téléphone, une seule passe diffusée immédiatement (contrôle qualité conservé
+  pour comics, éditorial et recherche).
+- **Nouvelle interface « verre »** : fond aurore animé, panneaux de verre dépoli (flou GPU, sans dépendance),
+  orbe lumineuse, grands titres, bulles dorées, barre de saisie et onglets flottants, mise en forme des
+  réponses, suggestions, retour haptique ; écrans Mémoire, Comics, Actions et Réglages redessinés.
+- Chaîne de compilation : Gradle 9.1, Kotlin 2.4, AGP 8.13, compileSdk 36.
+
 ## 0.3.1 — 18/11/2026
 - Premier lancement : carte « Forge a besoin de son cerveau » avec installation en un bouton du modèle
   recommandé (Qwen 2.5 1,5B, Apache 2.0, 1,6 Go, sans compte) : reprise après coupure, vérification

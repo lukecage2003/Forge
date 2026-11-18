@@ -1,0 +1,168 @@
+package ai.forge.app.ui
+
+import ai.forge.app.AppContainer
+import ai.forge.core.model.AutonomyLevel
+import ai.forge.core.model.DataClass
+import ai.forge.core.model.TaskCategory
+import ai.forge.models.DownloadableModel
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
+
+@Composable
+private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column {
+        Text(title.uppercase(), Modifier.padding(start = 8.dp, bottom = 6.dp), style = MaterialTheme.typography.labelMedium, color = ForgePalette.TextMuted)
+        GlassSurface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), contentPadding = PaddingValues(16.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
+        }
+    }
+}
+
+@Composable
+private fun Field(value: String, label: String, onChange: (String) -> Unit) = OutlinedTextField(value, onChange, label = { Text(label) },
+    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), singleLine = true,
+    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ForgePalette.Gold, unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+        focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, focusedLabelColor = ForgePalette.Gold))
+
+@Composable
+private fun Hint(text: String) = Text(text, style = MaterialTheme.typography.bodySmall, color = ForgePalette.TextMuted)
+
+@Composable
+fun SettingsScreen(container: AppContainer) {
+    var s by remember { mutableStateOf(container.settings) }
+    var anthropicKey by remember { mutableStateOf("") }
+    var oaiKey by remember { mutableStateOf("") }
+    var braveKey by remember { mutableStateOf("") }
+    var testResult by remember { mutableStateOf<String?>(null) }
+    var saved by remember { mutableStateOf(false) }
+    val brain by container.brain.collectAsState()
+    val detail by container.brainDetail.collectAsState()
+    var choice by remember { mutableStateOf(DownloadableModel.RECOMMENDED) }
+    val scope = rememberCoroutineScope()
+    val switchColors = SwitchDefaults.colors(checkedTrackColor = ForgePalette.Gold, checkedThumbColor = ForgePalette.Black)
+
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = TabBarSpace + 40.dp),
+        verticalArrangement = Arrangement.spacedBy(22.dp)) {
+        item { LargeTitle("Réglages", "Votre Forge, vos règles.") }
+
+        item {
+            Section("Cerveau") {
+                val current = s.localModelPath?.let { java.io.File(it).name }
+                Text(current?.let { DownloadableModel.byFileName(it)?.displayName ?: it } ?: "Aucun modèle sur le téléphone",
+                    style = MaterialTheme.typography.titleMedium, color = ForgePalette.Text)
+                detail?.let { Hint(it) }
+                Hint("Changer de modèle : choisissez-en un et installez-le. L'ancien fichier peut ensuite être supprimé.")
+                ModelChoices(choice) { choice = it }
+                when (val b = brain) {
+                    is AppContainer.BrainState.Downloading -> { GlassProgress(b.downloaded.toFloat() / b.total); Hint("${b.downloaded / 1_000_000} / ${b.total / 1_000_000} Mo") }
+                    else -> {
+                        val installed = current == choice.fileName
+                        GoldButton(if (installed) "Modèle actif" else "Installer ${choice.displayName}", Modifier.fillMaxWidth(), enabled = !installed) { container.installBrain(choice) }
+                        (b as? AppContainer.BrainState.Error)?.let { Text(it.message, color = ForgePalette.Error, style = MaterialTheme.typography.bodySmall) }
+                    }
+                }
+                if (current != null) GlassPill("Libérer l'espace des anciens modèles") {
+                    val dir = java.io.File(container.app.filesDir, "models")
+                    dir.listFiles()?.filter { it.absolutePath != s.localModelPath }?.forEach { it.delete() }
+                    testResult = "Anciens modèles supprimés."
+                }
+            }
+        }
+
+        item {
+            Section("Autres moteurs (facultatif)") {
+                Field(s.lanServerUrl.orEmpty(), "PC à la maison (Ollama) — ex. http://192.168.1.10:11434/v1") { s = s.copy(lanServerUrl = it.ifBlank { null }) }
+                Field(s.lanModel.orEmpty(), "Modèle sur le PC (ex. qwen3:8b)") { s = s.copy(lanModel = it.ifBlank { null }) }
+                Field(s.openAiCompatibleUrl.orEmpty(), "API compatible OpenAI — URL") { s = s.copy(openAiCompatibleUrl = it.ifBlank { null }) }
+                Field(s.openAiCompatibleModel.orEmpty(), "Modèle de l'API") { s = s.copy(openAiCompatibleModel = it.ifBlank { null }) }
+                Field(oaiKey, "Clé de l'API (vide = inchangée)") { oaiKey = it }
+                Field(anthropicKey, "Clé Anthropic (facultatif)") { anthropicKey = it }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) { Text("Strictement local", color = ForgePalette.Text); Hint("Aucun appel à un service en ligne.") }
+                    Switch(s.localOnly, { s = s.copy(localOnly = it) }, colors = switchColors)
+                }
+                GlassPill("Tester les connexions") {
+                    scope.launch {
+                        val results = mutableListOf<String>()
+                        for (p in container.providers()) results += "${p.displayName} : " + p.testConnection().fold({ it }, { "échec — ${it.message}" })
+                        testResult = results.joinToString("\n").ifEmpty { "Aucun moteur configuré." }
+                    }
+                }
+                testResult?.let { Hint(it) }
+            }
+        }
+
+        item {
+            Section("Recherche Web") {
+                Field(s.searxngUrl.orEmpty(), "SearXNG — URL") { s = s.copy(searxngUrl = it.ifBlank { null }) }
+                Field(braveKey, "Clé Brave Search (facultatif)") { braveKey = it }
+                Hint("Seule la question est envoyée au service de recherche ; vos documents et souvenirs ne le sont jamais.")
+            }
+        }
+
+        item {
+            Section("Confidentialité du cloud") {
+                Hint("Ce qu'un service en ligne peut recevoir. Vos comics et documents ne partent jamais sans votre accord ici.")
+                listOf(DataClass.GENERAL to "La question seule (recommandé)", DataClass.PERSONAL to "Question + souvenirs personnels",
+                    DataClass.PRIVATE_DOCUMENTS to "Question + souvenirs + documents").forEach { (dc, label) ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(s.cloudMaxDataClass == dc, { s = s.copy(cloudMaxDataClass = dc) }, colors = RadioButtonDefaults.colors(selectedColor = ForgePalette.Gold))
+                        Text(label, color = ForgePalette.Text)
+                    }
+                }
+                Text("Tâches autorisées", style = MaterialTheme.typography.labelLarge, color = ForgePalette.Text)
+                TaskCategory.entries.forEach { t ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(t.label, Modifier.weight(1f), color = ForgePalette.Text)
+                        Switch(t in s.cloudTasks, { on -> s = s.copy(cloudTasks = if (on) s.cloudTasks + t else s.cloudTasks - t) }, colors = switchColors)
+                    }
+                }
+                Field((s.cloudDailyRequestLimit ?: 0).toString(), "Requêtes cloud par jour (0 = illimité)") { v -> s = s.copy(cloudDailyRequestLimit = v.toIntOrNull()?.takeIf { it > 0 }) }
+                Hint("Usage : " + listOf("oai", "anthropic").joinToString(" · ") { container.usage.summary(it) })
+            }
+        }
+
+        item {
+            Section("Autonomie") {
+                AutonomyLevel.entries.forEach { lvl ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(s.autonomyCeiling == lvl, { s = s.copy(autonomyCeiling = lvl) }, colors = RadioButtonDefaults.colors(selectedColor = ForgePalette.Gold))
+                        Text("${lvl.ordinal} · ${lvl.label}", color = ForgePalette.Text)
+                    }
+                }
+                Hint("Les actions sensibles ou irréversibles demandent toujours votre confirmation.")
+            }
+        }
+
+        item {
+            Section("Voix") {
+                Text("Vitesse de parole : ${"%.2f".format(s.speechRate)}", color = ForgePalette.Text)
+                Slider(s.speechRate, { s = s.copy(speechRate = it) }, valueRange = 0.6f..1.6f,
+                    colors = SliderDefaults.colors(thumbColor = ForgePalette.Gold, activeTrackColor = ForgePalette.Gold))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Afficher la transcription", Modifier.weight(1f), color = ForgePalette.Text)
+                    Switch(s.showTranscript, { s = s.copy(showTranscript = it) }, colors = switchColors)
+                }
+            }
+        }
+
+        item {
+            GoldButton(if (saved) "Enregistré ✓" else "Enregistrer", Modifier.fillMaxWidth()) {
+                if (anthropicKey.isNotBlank()) container.keys.put("anthropic", anthropicKey)
+                if (oaiKey.isNotBlank()) container.keys.put("oai", oaiKey)
+                if (braveKey.isNotBlank()) container.keys.put("brave", braveKey)
+                container.voice.tts.speechRate = s.speechRate
+                container.updateSettings(s)
+                saved = true
+            }
+        }
+    }
+}
